@@ -1,0 +1,391 @@
+# 凝序 | Syntropy — 开发计划
+
+> **项目周期**：8周  
+> **目标**：完成 MVP 并上线公测  
+> **关联文档**：[PRD.md](./PRD.md)
+
+---
+
+## 📊 总体时间线
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Week 1-2          Week 3-4          Week 5-6          Week 7-8        │
+│  ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐     │
+│  │ Phase 1 │──────▶│ Phase 2 │──────▶│ Phase 3 │──────▶│ Phase 4 │     │
+│  │ 基础框架 │       │ AI与同步 │       │ 云端PWA │       │ 测试上线 │     │
+│  └─────────┘       └─────────┘       └─────────┘       └─────────┘     │
+│       │                 │                 │                 │          │
+│       ▼                 ▼                 ▼                 ▼          │
+│  M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🏗️ Phase 1: 秩序基石 (Foundation)
+
+**周期**：Week 1-2（共10个工作日）  
+**目标**：搭建可本地运行的基础任务管理器
+
+### 里程碑 M1 验收标准
+
+- [ ] 本地开发环境可正常运行
+- [ ] 可创建/编辑/删除任务
+- [ ] 多Tab切换正常
+- [ ] 可导出基础Excel文件
+- [ ] 数据持久化到IndexedDB
+
+### 详细任务分解
+
+#### Week 1: 项目初始化与数据层
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P1-01 | 初始化Next.js 14项目 | 2h | - | 项目骨架 | `npm run dev` 正常启动 |
+| P1-02 | 配置Tailwind CSS + shadcn/ui | 2h | P1-01 | UI基础组件 | Button/Input组件可用 |
+| P1-03 | 配置ESLint + Prettier | 1h | P1-01 | 代码规范 | lint无报错 |
+| P1-04 | 配置Dexie.js + 数据模型定义 | 4h | P1-01 | DB Schema | 可CRUD测试数据 |
+| P1-05 | 实现ID自动生成工具函数 | 2h | P1-04 | `generateId.ts` | ID格式符合SYN-XXXX规范 |
+| P1-06 | 创建Zustand状态管理Store | 4h | P1-04 | `useTaskStore.ts` | 状态读写正常 |
+| P1-07 | 实现任务CRUD服务层 | 4h | P1-04, P1-06 | `taskService.ts` | 增删改查全通 |
+
+**Week 1 产出**：数据层完整可用，可通过代码操作任务数据
+
+#### Week 2: UI组件与导出功能
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P1-08 | 开发顶部Tab导航组件 | 4h | P1-02 | `TabNav.tsx` | Tab切换动画流畅 |
+| P1-09 | 开发任务列表组件 | 6h | P1-02, P1-06 | `TaskList.tsx` | 可展示/勾选任务 |
+| P1-10 | 开发任务卡片组件 | 4h | P1-02 | `TaskCard.tsx` | 显示ID/内容/日期 |
+| P1-11 | 开发任务编辑弹窗 | 4h | P1-02 | `TaskEditModal.tsx` | 可编辑所有字段 |
+| P1-12 | 开发命令输入框组件 | 4h | P1-02 | `CommandInput.tsx` | 支持回车提交 |
+| P1-13 | 实现基础Excel导出 | 6h | P1-07 | `exportExcel.ts` | 可下载.xlsx文件 |
+| P1-14 | 集成主页面布局 | 4h | P1-08~P1-12 | `page.tsx` | 完整页面可交互 |
+
+**Week 2 产出**：完整的基础任务管理UI，支持多Tab和Excel导出
+
+### Phase 1 技术要点
+
+```typescript
+// 目录结构参考
+src/
+├── app/
+│   ├── page.tsx              # 主页面
+│   └── layout.tsx            # 根布局
+├── components/
+│   ├── ui/                   # shadcn/ui组件
+│   ├── TabNav.tsx
+│   ├── TaskList.tsx
+│   ├── TaskCard.tsx
+│   ├── TaskEditModal.tsx
+│   └── CommandInput.tsx
+├── lib/
+│   ├── db.ts                 # Dexie数据库实例
+│   ├── generateId.ts         # ID生成器
+│   └── exportExcel.ts        # Excel导出
+├── stores/
+│   ├── useTaskStore.ts       # 任务状态
+│   └── useProjectStore.ts    # 项目/Tab状态
+└── types/
+    └── index.ts              # 类型定义
+```
+
+---
+
+## 🧠 Phase 2: 智能凝结 (AI & Sync)
+
+**周期**：Week 3-4（共10个工作日）  
+**目标**：完成AI指令解析和Excel双向同步
+
+### 里程碑 M2 验收标准
+
+- [ ] AI可正确解析ADD/UPDATE/DELETE指令
+- [ ] 5秒撤销功能正常工作
+- [ ] Excel导入可识别变更
+- [ ] Visual Diff预览正确显示三色对比
+- [ ] BYOK设置页面可用
+
+### 详细任务分解
+
+#### Week 3: AI解析与撤销机制
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P2-01 | 设计AI Prompt模板 | 4h | - | `prompts/` | 覆盖3种意图 |
+| P2-02 | 创建AI服务抽象层 | 4h | P2-01 | `aiService.ts` | 支持OpenAI/DeepSeek切换 |
+| P2-03 | 实现指令解析逻辑 | 6h | P2-02 | `parseCommand.ts` | 测试指令解析正确 |
+| P2-04 | 开发设置页面UI | 4h | P1-02 | `settings/page.tsx` | API Key可保存 |
+| P2-05 | 实现API Key加密存储 | 3h | P2-04 | `crypto.ts` | Key不明文存储 |
+| P2-06 | 开发5秒撤销Toast组件 | 4h | P1-02 | `UndoToast.tsx` | 倒计时显示正确 |
+| P2-07 | 实现操作日志与回滚逻辑 | 6h | P1-06 | `useUndo.ts` | 撤销可恢复状态 |
+
+**Week 3 产出**：AI解析可用，撤销机制完整
+
+#### Week 4: Excel导入与差异对比
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P2-08 | 实现Excel文件解析 | 6h | - | `importExcel.ts` | 可读取.xlsx数据 |
+| P2-09 | 编写ID差异对比算法 | 6h | P2-08 | `diffEngine.ts` | 正确识别增/改/删 |
+| P2-10 | 开发Visual Diff预览组件 | 8h | P2-09 | `DiffPreview.tsx` | 三色标注清晰 |
+| P2-11 | 开发导入确认弹窗 | 4h | P2-10 | `ImportModal.tsx` | 可选择性同步 |
+| P2-12 | 实现批量同步逻辑 | 4h | P2-09 | `syncTasks.ts` | 数据正确合并 |
+| P2-13 | AI解析错误处理优化 | 4h | P2-03 | - | 低置信度时提示确认 |
+| P2-14 | 集成CommandInput与AI服务 | 4h | P2-03, P1-12 | - | 输入即触发解析 |
+
+**Week 4 产出**：完整的AI指令 + Excel双向同步功能
+
+### Phase 2 技术要点
+
+```typescript
+// AI解析返回结构
+interface ParsedCommand {
+  action: 'ADD' | 'UPDATE' | 'DELETE' | 'UNKNOWN';
+  task?: Partial<SyntropyTask>;
+  targetId?: string;       // UPDATE/DELETE时需要
+  confidence: number;      // 0-1
+  rawInput: string;
+}
+
+// Diff结果结构
+interface DiffResult {
+  added: SyntropyTask[];      // 新增的任务
+  modified: {                  // 变更的任务
+    id: string;
+    before: SyntropyTask;
+    after: SyntropyTask;
+    changedFields: string[];
+  }[];
+  deleted: SyntropyTask[];    // 删除的任务
+}
+```
+
+---
+
+## ☁️ Phase 3: 无缝流转 (Cloud Flow)
+
+**周期**：Week 5-6（共10个工作日）  
+**目标**：部署上线，完成邮件发送和PWA离线支持
+
+### 里程碑 M3 验收标准
+
+- [ ] 成功部署到Vercel
+- [ ] 可通过邮件发送Excel附件
+- [ ] PWA可安装到手机主屏
+- [ ] 离线时基础功能可用
+- [ ] Quick Mode闪电快传可用
+
+### 详细任务分解
+
+#### Week 5: 部署与邮件服务
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P3-01 | 创建Vercel项目 | 1h | - | 线上环境 | 可通过域名访问 |
+| P3-02 | 配置环境变量 | 1h | P3-01 | `.env.production` | 变量正确注入 |
+| P3-03 | 注册Resend账户并获取API Key | 1h | - | API凭证 | 可发送测试邮件 |
+| P3-04 | 开发邮件发送Server Action | 6h | P3-03 | `sendEmail.ts` | 邮件可送达 |
+| P3-05 | 实现Excel附件Base64编码 | 4h | P1-13 | `attachmentUtils.ts` | 附件可正常打开 |
+| P3-06 | 开发发送邮件弹窗UI | 4h | P1-02 | `EmailModal.tsx` | 可输入收件人 |
+| P3-07 | 使用Exceljs优化导出样式 | 6h | P1-13 | `styledExport.ts` | ID列锁定、自适应列宽 |
+| P3-08 | 实现Quick Mode无状态流程 | 6h | P3-04, P3-07 | `quick/page.tsx` | 输入→生成→发送 |
+
+**Week 5 产出**：线上可用，邮件发送功能完整
+
+#### Week 6: PWA与离线支持
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P3-09 | 配置PWA manifest.json | 2h | - | `manifest.json` | 元信息完整 |
+| P3-10 | 设计App图标（多尺寸） | 2h | - | `icons/` | 各尺寸清晰 |
+| P3-11 | 实现Service Worker注册 | 4h | - | `sw.ts` | 正确注册 |
+| P3-12 | 配置离线缓存策略 | 6h | P3-11 | - | 静态资源可离线访问 |
+| P3-13 | 实现离线操作队列 | 6h | P3-12 | `offlineQueue.ts` | 恢复网络后自动同步 |
+| P3-14 | 添加离线状态指示器 | 2h | P3-13 | `OfflineIndicator.tsx` | 状态变化可见 |
+| P3-15 | 添加"添加到主屏幕"引导 | 3h | P3-09 | `InstallPrompt.tsx` | iOS/Android均可安装 |
+| P3-16 | 移动端触控优化 | 4h | - | - | 大拇指操作舒适 |
+
+**Week 6 产出**：完整PWA体验，支持离线使用
+
+### Phase 3 技术要点
+
+```typescript
+// Service Worker 缓存策略
+const CACHE_STRATEGIES = {
+  // 静态资源：Cache First
+  static: ['/_next/static/', '/icons/', '/fonts/'],
+  
+  // API请求：Network First, fallback to cache
+  api: ['/api/'],
+  
+  // HTML页面：Stale While Revalidate
+  pages: ['/', '/settings', '/quick']
+};
+
+// 离线队列结构
+interface OfflineAction {
+  id: string;
+  timestamp: number;
+  type: 'CREATE' | 'UPDATE' | 'DELETE';
+  payload: any;
+  retryCount: number;
+}
+```
+
+---
+
+## 🧪 Phase 4: 测试与上线 (Testing & Launch)
+
+**周期**：Week 7-8（共10个工作日）  
+**目标**：完成测试，修复问题，正式上线
+
+### 里程碑 M4 验收标准
+
+- [ ] 核心流程E2E测试通过
+- [ ] Lighthouse评分 > 90
+- [ ] 无P0/P1级别Bug
+- [ ] 用户文档完成
+- [ ] 正式域名上线
+
+### 详细任务分解
+
+#### Week 7: 测试与Bug修复
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P4-01 | 配置Vitest单元测试环境 | 2h | - | `vitest.config.ts` | 可运行测试 |
+| P4-02 | 编写核心工具函数单元测试 | 6h | P4-01 | `*.test.ts` | 覆盖率 > 80% |
+| P4-03 | 配置Playwright E2E测试 | 2h | - | `playwright.config.ts` | 可运行E2E |
+| P4-04 | 编写核心流程E2E测试 | 8h | P4-03 | `e2e/*.spec.ts` | 5条核心流程通过 |
+| P4-05 | 移动端适配测试 | 4h | - | Bug List | iOS Safari/Android Chrome |
+| P4-06 | 性能优化（Lighthouse） | 6h | - | - | 评分 > 90 |
+| P4-07 | Bug修复（第一轮） | 8h | P4-04, P4-05 | - | P0/P1 Bug清零 |
+
+**Week 7 产出**：测试覆盖完成，主要Bug修复
+
+#### Week 8: 文档与发布
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P4-08 | 编写用户使用指南 | 4h | - | `docs/guide.md` | 覆盖核心功能 |
+| P4-09 | 编写FAQ文档 | 2h | - | `docs/faq.md` | 常见问题解答 |
+| P4-10 | 录制功能演示视频 | 3h | - | `demo.mp4` | 清晰展示核心流程 |
+| P4-11 | 配置自定义域名 | 2h | - | DNS配置 | 域名可访问 |
+| P4-12 | 配置错误监控（Sentry） | 3h | - | Sentry项目 | 可捕获线上错误 |
+| P4-13 | Bug修复（第二轮） | 6h | P4-07 | - | 所有已知Bug修复 |
+| P4-14 | 最终验收测试 | 4h | - | 验收报告 | 全部通过 |
+| P4-15 | 正式发布公告 | 2h | P4-14 | 发布文案 | 社交媒体/社区发布 |
+
+**Week 8 产出**：正式上线，文档完备
+
+### E2E测试用例
+
+```typescript
+// 核心流程测试
+describe('Core Flows', () => {
+  test('用户可通过语音指令添加任务', async () => {
+    // 1. 打开应用
+    // 2. 在命令框输入"明天下午三点开会"
+    // 3. 验证任务列表出现新任务
+    // 4. 验证任务内容和日期正确
+  });
+
+  test('用户可导出并重新导入Excel', async () => {
+    // 1. 创建3个任务
+    // 2. 导出Excel
+    // 3. 修改Excel中的1个任务
+    // 4. 导入Excel
+    // 5. 验证Diff预览正确显示变更
+    // 6. 确认同步
+    // 7. 验证任务列表已更新
+  });
+
+  test('用户可撤销AI操作', async () => {
+    // 1. 输入指令添加任务
+    // 2. 在5秒内点击撤销
+    // 3. 验证任务已被移除
+  });
+
+  test('用户可通过邮件发送任务清单', async () => {
+    // 1. 创建任务
+    // 2. 点击发送邮件
+    // 3. 输入收件人
+    // 4. 确认发送
+    // 5. 验证发送成功提示
+  });
+
+  test('PWA可离线使用基础功能', async () => {
+    // 1. 加载应用
+    // 2. 断开网络
+    // 3. 添加任务
+    // 4. 验证任务保存成功
+    // 5. 恢复网络
+    // 6. 验证数据同步
+  });
+});
+```
+
+---
+
+## 📅 里程碑总览
+
+| 里程碑 | 目标日期 | 关键交付物 | 验收人 |
+|--------|----------|------------|--------|
+| **M1: 内部可用版** | Week 2 末 | 基础任务管理 + 多Tab + 导出 | 开发者自测 |
+| **M2: AI功能完成** | Week 4 末 | AI解析 + 撤销 + 导入同步 | 开发者自测 |
+| **M3: Beta发布** | Week 6 末 | 线上部署 + 邮件 + PWA | 内测用户 |
+| **M4: 正式上线** | Week 8 末 | 完整产品 + 文档 | 公开用户 |
+
+---
+
+## ⚠️ 风险与应对
+
+| 风险 | 可能性 | 影响 | 应对策略 |
+|------|--------|------|----------|
+| AI解析准确率不达标 | 中 | 高 | 提前准备Prompt优化方案，准备fallback到手动添加 |
+| Resend邮件送达率问题 | 低 | 中 | 备选方案：Nodemailer + SMTP |
+| 移动端兼容性问题 | 中 | 中 | 早期引入移动端测试，使用BrowserStack |
+| IndexedDB存储限制 | 低 | 中 | 实现数据导出备份功能 |
+| 开发进度延迟 | 中 | 高 | 预留Week 7作为缓冲，必要时砍掉P2功能 |
+
+---
+
+## 📊 进度跟踪模板
+
+```markdown
+## Weekly Status Report
+
+### Week X (MM/DD - MM/DD)
+
+**完成任务**:
+- [ ] P1-01: 描述
+- [ ] P1-02: 描述
+
+**进行中**:
+- [ ] P1-03: 描述 (预计明天完成)
+
+**阻塞/问题**:
+- 问题描述及解决方案
+
+**下周计划**:
+- P1-04, P1-05, P1-06
+
+**里程碑进度**: M1 60% ████████░░░░
+```
+
+---
+
+## 🔗 相关资源
+
+- **设计稿**: [Figma链接] (待补充)
+- **API文档**: [Swagger链接] (待补充)
+- **部署地址**: 
+  - 开发环境: `dev.syntropy.app`
+  - 生产环境: `syntropy.app`
+- **监控面板**: [Vercel Analytics] (待配置)
+
+---
+
+*最后更新: 2026-01-17*
