@@ -76,6 +76,13 @@ App 任务列表  ←──── ID 锚点 ────→  Excel 工作表
 - 🔌 离线可用，网络恢复自动同步
 - 👆 触控优化，大拇指舒适操作区
 
+### 👤 用户系统（Phase 5）
+
+- 🔐 邮箱密码注册登录，Supabase Auth 驱动
+- ☁️ 本地优先，云端备份，数据永不丢失
+- 🔄 多设备无缝同步，新设备一键恢复
+- 🛡️ 隐私优先，API Key 永不上云
+
 ---
 
 ## 🛠 技术栈
@@ -91,6 +98,8 @@ App 任务列表  ←──── ID 锚点 ────→  Excel 工作表
 | **Excel** | SheetJS + ExcelJS | 读写 + 样式控制 |
 | **部署** | Vercel | 边缘函数 + CDN |
 | **测试** | Vitest + Playwright | 单元测试 + E2E |
+| **认证** | Supabase Auth | 邮箱密码认证 |
+| **云存储** | Supabase PostgreSQL | 用户数据云端备份 |
 
 ---
 
@@ -132,6 +141,10 @@ DEEPSEEK_API_KEY=sk-xxx
 
 # 邮件服务
 RESEND_API_KEY=re_xxx
+
+# Supabase (Phase 5 用户系统)
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx
 
 # 应用配置
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -211,14 +224,14 @@ src/
 ## 🗺 开发路线图
 
 ```
-Week 1-2          Week 3-4          Week 5-6          Week 7-8
-┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐
-│ Phase 1 │──────▶│ Phase 2 │──────▶│ Phase 3 │──────▶│ Phase 4 │
-│ 基础框架 │       │ AI与同步 │       │ 云端PWA │       │ 测试上线 │
-└─────────┘       └─────────┘       └─────────┘       └─────────┘
-     │                 │                 │                 │
-     ▼                 ▼                 ▼                 ▼
-M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线
+Week 1-2          Week 3-4          Week 5-6          Week 7-8          Week 9-10
+┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐
+│ Phase 1 │──────▶│ Phase 2 │──────▶│ Phase 3 │──────▶│ Phase 4 │──────▶│ Phase 5 │
+│ 基础框架 │       │ AI与同步 │       │ 云端PWA │       │ 测试上线 │       │ 用户系统 │
+└─────────┘       └─────────┘       └─────────┘       └─────────┘       └─────────┘
+     │                 │                 │                 │                 │
+     ▼                 ▼                 ▼                 ▼                 ▼
+M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线     M5: 多端同步
 ```
 
 | 阶段 | 状态 | 核心功能 |
@@ -227,6 +240,7 @@ M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线
 | **Phase 2** | ⏳ 待开始 | AI 解析、5秒撤销、Visual Diff |
 | **Phase 3** | ⏳ 待开始 | 邮件发送、PWA 离线、Quick Mode |
 | **Phase 4** | ⏳ 待开始 | 测试优化、文档、正式上线 |
+| **Phase 5** | ⏳ 待开始 | 用户认证、云端同步、多端恢复 |
 
 > 📋 详细开发计划请查看 [plan.md](./plan.md)
 
@@ -308,6 +322,7 @@ pnpm start
 - [Dexie.js](https://dexie.org/) - IndexedDB 封装
 - [SheetJS](https://sheetjs.com/) - Excel 处理库
 - [Resend](https://resend.com/) - 邮件发送服务
+- [Supabase](https://supabase.com/) - 开源 Firebase 替代方案
 
 ---
 

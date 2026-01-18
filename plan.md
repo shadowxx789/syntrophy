@@ -1,7 +1,7 @@
 # 凝序 | Syntropy — 开发计划
 
-> **项目周期**：8周  
-> **目标**：完成 MVP 并上线公测  
+> **项目周期**：10周  
+> **目标**：完成 MVP 并上线公测，可选扩展用户系统  
 > **关联文档**：[PRD.md](./PRD.md)
 
 ---
@@ -9,16 +9,16 @@
 ## 📊 总体时间线
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Week 1-2          Week 3-4          Week 5-6          Week 7-8        │
-│  ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐     │
-│  │ Phase 1 │──────▶│ Phase 2 │──────▶│ Phase 3 │──────▶│ Phase 4 │     │
-│  │ 基础框架 │       │ AI与同步 │       │ 云端PWA │       │ 测试上线 │     │
-│  └─────────┘       └─────────┘       └─────────┘       └─────────┘     │
-│       │                 │                 │                 │          │
-│       ▼                 ▼                 ▼                 ▼          │
-│  M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线     │
-└─────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────────┐
+│  Week 1-2          Week 3-4          Week 5-6          Week 7-8          Week 9-10       │
+│  ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌─────────┐     │
+│  │ Phase 1 │──────▶│ Phase 2 │──────▶│ Phase 3 │──────▶│ Phase 4 │──────▶│ Phase 5 │     │
+│  │ 基础框架 │       │ AI与同步 │       │ 云端PWA │       │ 测试上线 │       │ 用户系统 │     │
+│  └─────────┘       └─────────┘       └─────────┘       └─────────┘       └─────────┘     │
+│       │                 │                 │                 │                 │          │
+│       ▼                 ▼                 ▼                 ▼                 ▼          │
+│  M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线     M5: 多端同步      │
+└───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -280,51 +280,188 @@ interface OfflineAction {
 
 **Week 8 产出**：正式上线，文档完备
 
-### E2E测试用例
+---
+
+## 👤 Phase 5: 用户系统 (User System)
+
+**周期**：Week 9-10（共10个工作日）  
+**目标**：实现用户认证与跨设备数据同步  
+**前置条件**：Phase 4 正式上线完成
+
+### 里程碑 M5 验收标准
+
+- [ ] 用户可通过邮箱密码注册/登录
+- [ ] 登录后数据自动同步至云端
+- [ ] 新设备登录可恢复全部数据
+- [ ] 同步状态清晰可见
+- [ ] 离线操作后联网自动同步
+
+### 详细任务分解
+
+#### Week 9: 认证与基础同步
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P5-01 | 创建Supabase项目 | 1h | - | Supabase实例 | 控制台可访问 |
+| P5-02 | 配置Supabase Auth | 2h | P5-01 | Auth设置 | 邮箱认证已启用 |
+| P5-03 | 设计PostgreSQL表结构 | 3h | P5-01 | SQL Schema | 表结构与本地一致 |
+| P5-04 | 创建Supabase客户端封装 | 3h | P5-02 | `supabaseClient.ts` | 可调用Auth API |
+| P5-05 | 开发登录页面UI | 4h | P5-04 | `auth/login/page.tsx` | 表单验证通过 |
+| P5-06 | 开发注册页面UI | 4h | P5-04 | `auth/register/page.tsx` | 含密码强度提示 |
+| P5-07 | 实现邮箱验证流程 | 3h | P5-02 | 验证邮件模板 | 验证链接可用 |
+| P5-08 | 实现忘记密码流程 | 3h | P5-02 | `auth/reset/page.tsx` | 重置邮件可送达 |
+| P5-09 | 开发Auth状态管理 | 4h | P5-04 | `useAuthStore.ts` | 登录状态正确持久 |
+| P5-10 | 实现登出与会话清理 | 2h | P5-09 | - | Token正确清除 |
+
+**Week 9 产出**：完整的用户认证流程
+
+#### Week 10: 数据同步与多端恢复
+
+| 任务ID | 任务名称 | 预估工时 | 依赖 | 产出物 | 验收标准 |
+|--------|----------|----------|------|--------|----------|
+| P5-11 | 实现本地→云端同步逻辑 | 8h | P5-03, P5-09 | `syncService.ts` | 数据正确上传 |
+| P5-12 | 实现云端→本地恢复逻辑 | 6h | P5-11 | `restoreService.ts` | 数据正确下载 |
+| P5-13 | 开发同步状态指示器 | 3h | P5-11 | `SyncIndicator.tsx` | 状态变化可见 |
+| P5-14 | 实现冲突检测与解决 | 5h | P5-11 | `conflictResolver.ts` | Last Write Wins |
+| P5-15 | 开发个人资料页面 | 4h | P5-09 | `profile/page.tsx` | 可修改用户名 |
+| P5-16 | 添加登出清理选项 | 2h | P5-10 | 设置项 | 可选清除本地数据 |
+| P5-17 | 同步功能E2E测试 | 4h | P5-11 | `e2e/sync.spec.ts` | 核心流程通过 |
+| P5-18 | 用户系统文档更新 | 2h | - | `docs/auth.md` | 覆盖认证流程 |
+
+**Week 10 产出**：完整的多端同步功能
+
+### Phase 5 技术要点
+
+#### Supabase PostgreSQL 表结构
+
+```sql
+-- 用户扩展信息 (Supabase Auth 自带 auth.users)
+CREATE TABLE public.user_profiles (
+  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  display_name TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 同步的任务表
+CREATE TABLE public.tasks (
+  id TEXT PRIMARY KEY,                    -- SYN-XXXX
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  project_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  start_date DATE,
+  end_date DATE,
+  status TEXT DEFAULT 'todo',
+  priority TEXT,
+  raw_command TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  deleted_at TIMESTAMPTZ,                 -- 软删除
+  UNIQUE(id, user_id)
+);
+
+-- 同步的项目表
+CREATE TABLE public.projects (
+  id TEXT PRIMARY KEY,                    -- PROJ-XXXX
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  name TEXT NOT NULL,
+  display_order INT DEFAULT 0,
+  color TEXT,
+  is_archived BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  UNIQUE(id, user_id)
+);
+
+-- 同步元数据
+CREATE TABLE public.sync_metadata (
+  user_id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  last_sync_at TIMESTAMPTZ,
+  device_id TEXT,
+  sync_version INT DEFAULT 0
+);
+
+-- RLS 策略
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sync_metadata ENABLE ROW LEVEL SECURITY;
+
+-- 用户只能访问自己的数据
+CREATE POLICY "Users can CRUD own profiles" ON public.user_profiles
+  FOR ALL USING (auth.uid() = id);
+
+CREATE POLICY "Users can CRUD own tasks" ON public.tasks
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can CRUD own projects" ON public.projects
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can CRUD own sync_metadata" ON public.sync_metadata
+  FOR ALL USING (auth.uid() = user_id);
+```
+
+#### 同步服务接口
 
 ```typescript
-// 核心流程测试
-describe('Core Flows', () => {
-  test('用户可通过语音指令添加任务', async () => {
-    // 1. 打开应用
-    // 2. 在命令框输入"明天下午三点开会"
-    // 3. 验证任务列表出现新任务
-    // 4. 验证任务内容和日期正确
-  });
+// 同步服务
+interface SyncService {
+  // 初始化同步 (登录后调用)
+  initialize(userId: string): Promise<void>;
+  
+  // 推送本地变更到云端
+  pushChanges(): Promise<SyncResult>;
+  
+  // 拉取云端数据到本地
+  pullChanges(): Promise<SyncResult>;
+  
+  // 全量恢复 (新设备)
+  fullRestore(): Promise<RestoreResult>;
+  
+  // 获取同步状态
+  getStatus(): SyncStatus;
+}
 
-  test('用户可导出并重新导入Excel', async () => {
-    // 1. 创建3个任务
-    // 2. 导出Excel
-    // 3. 修改Excel中的1个任务
-    // 4. 导入Excel
-    // 5. 验证Diff预览正确显示变更
-    // 6. 确认同步
-    // 7. 验证任务列表已更新
-  });
+interface SyncResult {
+  success: boolean;
+  uploaded: number;
+  downloaded: number;
+  conflicts: ConflictItem[];
+  errors: SyncError[];
+}
 
-  test('用户可撤销AI操作', async () => {
-    // 1. 输入指令添加任务
-    // 2. 在5秒内点击撤销
-    // 3. 验证任务已被移除
-  });
+interface SyncStatus {
+  state: 'idle' | 'syncing' | 'error';
+  lastSyncAt: Date | null;
+  pendingChanges: number;
+  isOnline: boolean;
+}
+```
 
-  test('用户可通过邮件发送任务清单', async () => {
-    // 1. 创建任务
-    // 2. 点击发送邮件
-    // 3. 输入收件人
-    // 4. 确认发送
-    // 5. 验证发送成功提示
-  });
+#### 目录结构扩展
 
-  test('PWA可离线使用基础功能', async () => {
-    // 1. 加载应用
-    // 2. 断开网络
-    // 3. 添加任务
-    // 4. 验证任务保存成功
-    // 5. 恢复网络
-    // 6. 验证数据同步
-  });
-});
+```
+src/
+├── app/
+│   ├── auth/
+│   │   ├── login/page.tsx
+│   │   ├── register/page.tsx
+│   │   ├── reset/page.tsx
+│   │   └── verify/page.tsx
+│   └── profile/page.tsx
+├── components/
+│   ├── auth/
+│   │   ├── LoginForm.tsx
+│   │   ├── RegisterForm.tsx
+│   │   └── AuthGuard.tsx
+│   └── SyncIndicator.tsx
+├── lib/
+│   ├── supabaseClient.ts
+│   ├── syncService.ts
+│   └── conflictResolver.ts
+└── stores/
+    └── useAuthStore.ts
 ```
 
 ---
@@ -337,6 +474,7 @@ describe('Core Flows', () => {
 | **M2: AI功能完成** | Week 4 末 | AI解析 + 撤销 + 导入同步 | 开发者自测 |
 | **M3: Beta发布** | Week 6 末 | 线上部署 + 邮件 + PWA | 内测用户 |
 | **M4: 正式上线** | Week 8 末 | 完整产品 + 文档 | 公开用户 |
+| **M5: 多端同步** | Week 10 末 | 用户认证 + 云端同步 | 公开用户 |
 
 ---
 
@@ -349,6 +487,8 @@ describe('Core Flows', () => {
 | 移动端兼容性问题 | 中 | 中 | 早期引入移动端测试，使用BrowserStack |
 | IndexedDB存储限制 | 低 | 中 | 实现数据导出备份功能 |
 | 开发进度延迟 | 中 | 高 | 预留Week 7作为缓冲，必要时砍掉P2功能 |
+| Supabase服务不稳定 | 低 | 中 | 本地优先架构，云端仅备份，降级时仍可离线使用 |
+| 同步冲突处理复杂 | 中 | 中 | 采用简单的Last Write Wins策略，避免复杂合并 |
 
 ---
 

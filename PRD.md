@@ -115,6 +115,12 @@
 * **US-07**：作为一名采购专员，我想快速生成临时清单并发送，无需保存到本地
 * **US-08**：作为一名用户，我想离线时仍能使用基础功能，以便于在网络不稳定时工作
 
+#### 扩展功能（Phase 5）
+
+* **US-09**：作为一名用户，我想注册账户并登录，以便于在多设备间同步数据
+* **US-10**：作为一名用户，我想管理个人资料，以便于个性化我的使用体验
+* **US-11**：作为一名用户，我想在新设备上恢复我的数据，以便于无缝切换工作环境
+
 ---
 
 ## ⚡ 3. 核心功能规范 (Functional Specifications)
@@ -149,6 +155,15 @@
 | **P2** | PWA离线 | Service Worker缓存策略 | US-08 |
 | **P2** | 深色模式 | 跟随系统或手动切换 | - |
 | **P2** | 导出样式优化 | 锁定ID列、自适应列宽 | - |
+
+#### Phase 4 用户系统（可选扩展）
+
+| 优先级 | 功能模块 | 具体能力 | 对应用户故事 |
+|--------|----------|----------|--------------|
+| **P3** | 用户认证 | Supabase Auth邮箱密码登录 | US-09 |
+| **P3** | 个人资料 | 用户名、头像、偏好设置 | US-10 |
+| **P3** | 云端同步 | 本地数据备份至Supabase | US-09, US-11 |
+| **P3** | 多端恢复 | 新设备拉取云端数据 | US-11 |
 
 #### MVP验收标准 (Definition of Done)
 
@@ -205,6 +220,51 @@
 * **无状态流转**：针对临时采购单或一次性清单，输入后由 Vercel 直接生成 Excel 并发送邮件，本地不产生持久化存储。
 * **使用场景**：临时采购清单、会议纪要快速分发、一次性任务列表
 
+### 3.4 用户系统 (User System) — Phase 5
+
+#### 设计原则
+
+* **本地优先**：所有数据首先存储在本地 IndexedDB，云端仅作备份
+* **渐进增强**：未登录用户仍可使用全部本地功能，登录后解锁云同步
+* **隐私优先**：敏感数据（API Key）永不上传云端
+
+#### 认证方案
+
+* **Provider**: Supabase Auth
+* **认证方式**: 邮箱 + 密码（优先）；后续可扩展 OAuth（Google/GitHub）
+* **会话管理**: JWT Token，自动刷新
+
+#### 同步策略
+
+```
+本地 IndexedDB (主数据源)
+       │
+       ▼
+   变更检测 (createdAt/updatedAt)
+       │
+       ▼
+Supabase PostgreSQL (云端备份)
+       │
+       ▼
+   冲突解决 (Last Write Wins)
+```
+
+* **同步触发**：用户登录时、数据变更后（防抖 5 秒）、手动触发
+* **冲突策略**：以 `updatedAt` 时间戳判断，较新者胜出
+* **断网处理**：本地正常操作，联网后自动同步队列
+
+#### 功能范围
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 注册/登录/登出 | 邮箱密码认证 | P0 |
+| 邮箱验证 | 注册后发送验证邮件 | P0 |
+| 忘记密码 | 邮件重置密码 | P1 |
+| 个人资料 | 用户名、头像（可选） | P1 |
+| 数据同步 | 本地→云端增量同步 | P0 |
+| 数据恢复 | 云端→本地全量拉取 | P0 |
+| 登出清理 | 可选：登出时清除本地数据 | P2 |
+
 ---
 
 ## 🔄 4. 标准作业流程 (SOP)
@@ -228,6 +288,8 @@
 * **文档处理**：SheetJS (xlsx) + exceljs (负责精细化 Excel 样式控制)。
 * **AI 核心**：OpenAI / DeepSeek (BYOK 模式，Key 存储于用户本地)。
 * **测试框架**：Vitest (单元测试) + Playwright (E2E测试)。
+* **用户认证**：Supabase Auth（邮箱密码认证）。
+* **云端存储**：Supabase PostgreSQL（用户数据云端备份）。
 
 ### 5.2 数据模型 (Data Schema)
 
@@ -292,6 +354,26 @@ interface ActionLog {
   canUndo: boolean;        // 是否仍在撤销窗口内
   expiresAt: string;       // 撤销窗口过期时间
 }
+
+// 用户实体 (Phase 5)
+interface User {
+  id: string;              // Supabase Auth UUID
+  email: string;           // 登录邮箱
+  displayName?: string;    // 显示名称
+  avatarUrl?: string;      // 头像URL
+  createdAt: string;       // 注册时间
+  lastLoginAt: string;     // 最后登录时间
+}
+
+// 云同步状态 (Phase 5)
+interface CloudSyncStatus {
+  id: 'singleton';         // 单例模式
+  userId?: string;         // 当前登录用户ID
+  lastSyncAt?: string;     // 最后同步时间
+  syncState: 'idle' | 'syncing' | 'error';
+  pendingChanges: number;  // 待同步变更数
+  errorMessage?: string;   // 同步错误信息
+}
 ```
 
 #### IndexedDB 表结构
@@ -305,6 +387,16 @@ db.version(1).stores({
   settings: 'id',
   syncRecords: 'id, timestamp, projectId',
   actionLogs: 'id, timestamp, canUndo'
+});
+
+// Phase 5 扩展
+db.version(2).stores({
+  tasks: 'id, projectId, status, createdAt, updatedAt',
+  projects: 'id, order, isArchived',
+  settings: 'id',
+  syncRecords: 'id, timestamp, projectId',
+  actionLogs: 'id, timestamp, canUndo',
+  cloudSync: 'id'  // 云同步状态
 });
 ```
 
@@ -482,8 +574,8 @@ enum TrackEvent {
 Week 1-2: Phase 1 基础框架
 Week 3-4: Phase 2 AI与同步
 Week 5-6: Phase 3 云端与PWA
-Week 7:   测试与修复
-Week 8:   上线与迭代
+Week 7-8: Phase 4 测试与上线
+Week 9-10: Phase 5 用户系统（可选扩展）
 ```
 
 ### Phase 1: 秩序基石 (Foundation)
@@ -506,3 +598,21 @@ Week 8:   上线与迭代
 * [ ] 接入 Resend 后端邮件发送 API（处理 Base64 附件）。
 * [ ] 接入 Exceljs 优化导出的 Excel 格式（锁定 ID 列）。
 * [ ] 完善 PWA manifest.json 与 Service Worker 离线缓存策略。
+
+### Phase 4: 测试与上线 (Testing & Launch)
+
+* [ ] 配置 Vitest + Playwright 测试环境。
+* [ ] 编写核心流程 E2E 测试用例。
+* [ ] Lighthouse 性能优化（评分 > 90）。
+* [ ] 用户文档与 FAQ 编写。
+* [ ] 正式域名配置与上线。
+
+### Phase 5: 用户系统 (User System) — 可选扩展
+
+* [ ] 集成 Supabase Auth 实现邮箱密码认证。
+* [ ] 开发登录/注册/登出 UI 组件。
+* [ ] 配置 Supabase PostgreSQL 表结构。
+* [ ] 实现本地 → 云端增量同步逻辑。
+* [ ] 实现云端 → 本地数据恢复功能。
+* [ ] 开发个人资料管理页面。
+* [ ] 同步状态指示器与冲突解决。
