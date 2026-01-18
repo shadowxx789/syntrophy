@@ -275,6 +275,166 @@ Supabase PostgreSQL (云端备份)
 4. **处理 (Offline Processing)**：在公司电脑端打开 Excel，进行深度编辑、排序或复杂计算。
 5. **回流 (Reflow)**：App 端选择导入更新，系统对比 ID 并展示差异预览图，用户一键确认同步。
 
+### 4.1 用户流程与状态 (User Flows & States)
+
+#### 核心流程状态机
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AI 指令解析流程                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌─────────┐    输入指令    ┌──────────┐    解析成功   ┌───────────┐   │
+│   │  IDLE   │ ─────────────> │ PARSING  │ ────────────> │ CONFIRMING│   │
+│   └─────────┘                └──────────┘               └───────────┘   │
+│        ▲                          │                          │          │
+│        │                     解析失败                    5秒超时/确认    │
+│        │                          │                          │          │
+│        │                          ▼                          ▼          │
+│        │                   ┌──────────┐               ┌───────────┐     │
+│        │                   │  ERROR   │               │  APPLIED  │     │
+│        │                   └──────────┘               └───────────┘     │
+│        │                          │                          │          │
+│        │              降级为纯文本添加                   用户点击撤销     │
+│        │                          │                          │          │
+│        │                          ▼                          ▼          │
+│        │                   ┌──────────┐               ┌───────────┐     │
+│        └───────────────────│ FALLBACK │               │  UNDONE   │     │
+│        └───────────────────└──────────┘               └───────────┘     │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 首次使用流程 (Onboarding)
+
+| 步骤 | 用户动作 | 系统响应 | 失败处理 |
+|------|----------|----------|----------|
+| 1 | 首次打开应用 | 显示欢迎页 + 功能介绍 | - |
+| 2 | 创建第一个项目 | 引导命名项目 | 提供默认名称"我的任务" |
+| 3 | 输入第一条指令 | 展示 AI 解析结果 | 低置信度时请求确认 |
+| 4 | 查看任务列表 | 高亮新任务 | - |
+| 5 | 可选：配置 API Key | 引导至设置页 | 跳过使用默认配额 |
+
+#### 离线模式流程
+
+```
+在线状态                              离线状态
+    │                                     │
+    │  ┌─────────────────┐               │
+    │  │ 正常操作        │               │
+    │  │ • AI 解析可用   │  ──网络断开──>│  ┌─────────────────┐
+    │  │ • 邮件发送可用  │               │  │ 离线模式        │
+    │  │ • 同步可用      │               │  │ • AI 降级为文本 │
+    │  └─────────────────┘               │  │ • 邮件按钮禁用  │
+    │                                    │  │ • 操作队列暂存  │
+    │                                    │  └─────────────────┘
+    │                                    │           │
+    │  ┌─────────────────┐               │           │
+    │  │ 恢复同步        │  <──网络恢复──│           │
+    │  │ • 处理待同步队列│               │           │
+    │  │ • 显示同步状态  │               │           │
+    │  └─────────────────┘               │           │
+```
+
+#### 账户切换流程
+
+| 场景 | 行为 | 数据处理 |
+|------|------|----------|
+| 未登录 → 登录 | 本地数据关联到用户 | 询问是否上传现有数据 |
+| 登录 → 登出 | 清除会话 | 可选：保留/清除本地数据 |
+| 切换账户 | 先登出再登录 | 警告数据覆盖风险 |
+| 新设备登录 | 拉取云端数据 | 询问是否覆盖本地 |
+
+#### 失败状态处理
+
+| 失败类型 | 用户看到的 | 可执行的操作 |
+|----------|------------|--------------|
+| AI 解析失败 | "无法识别指令" + 原始文本 | 重试 / 作为纯文本添加 / 编辑后重试 |
+| 同步失败 | "同步失败" + 错误信息 | 重试 / 稍后自动重试 / 查看详情 |
+| 冲突检测 | "发现冲突" + 双版本对比 | 选择本地 / 选择云端 / 手动合并 |
+| Excel 导入失败 | "文件格式错误" + 具体原因 | 下载模板 / 重新选择文件 |
+| 邮件发送失败 | "发送失败" | 重试 / 下载文件本地发送 |
+
+### 4.2 PWA 策略 (PWA Strategy)
+
+#### Service Worker 缓存策略
+
+| 资源类型 | 策略 | 说明 |
+|----------|------|------|
+| 静态资源 (JS/CSS/图片) | Cache First | 优先使用缓存，更新时后台刷新 |
+| HTML 页面 | Stale While Revalidate | 先显示缓存，同时后台更新 |
+| API 请求 | Network First | 优先网络，失败时使用缓存 |
+| AI API | Network Only | 不缓存，离线时降级 |
+
+#### 版本升级流程
+
+```
+┌──────────────┐
+│  用户访问    │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐     版本相同      ┌──────────────┐
+│ 检查 SW 版本 │ ─────────────────>│   正常使用    │
+└──────┬───────┘                   └──────────────┘
+       │ 版本不同
+       ▼
+┌──────────────┐
+│ 后台下载新版 │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────────────────┐
+│ 显示提示: "新版本可用，点击更新" │
+└──────────────┬───────────────────┘
+               │ 用户点击
+               ▼
+┌──────────────┐
+│  刷新页面    │
+└──────────────┘
+```
+
+#### Schema 迁移安全
+
+```typescript
+// 启动时检查
+async function checkSchemaCompatibility(): Promise<CompatibilityResult> {
+  const appSchemaVersion = APP_SCHEMA_VERSION;  // 应用期望的版本
+  const dbSchemaVersion = await getDbSchemaVersion();
+  
+  if (dbSchemaVersion > appSchemaVersion) {
+    // 数据库版本更高 (降级场景)
+    return {
+      compatible: false,
+      action: 'BLOCK_AND_UPGRADE_APP',
+      message: '请更新应用到最新版本'
+    };
+  }
+  
+  if (dbSchemaVersion < appSchemaVersion) {
+    // 需要迁移
+    return {
+      compatible: false,
+      action: 'RUN_MIGRATION',
+      migrations: getMigrationsBetween(dbSchemaVersion, appSchemaVersion)
+    };
+  }
+  
+  return { compatible: true };
+}
+```
+
+#### 离线数据完整性
+
+| 检查项 | 触发时机 | 失败处理 |
+|--------|----------|----------|
+| IndexedDB 可用性 | 应用启动 | 降级到 localStorage + 警告 |
+| 数据完整性校验 | 应用启动 | 尝试修复 / 提示导出备份 |
+| 存储配额检查 | 写入前 | 提示清理 / 导出旧数据 |
+| 迁移完整性 | 迁移后 | 回滚 + 提示导出备份 |
+
+> 📘 详细的安全策略请参阅 [docs/SECURITY-SPEC.md](./docs/SECURITY-SPEC.md)
+
 ---
 
 ## 🛠 5. 技术架构 (Technical Architecture)
@@ -306,8 +466,17 @@ interface SyntropyTask {
   status: 'todo' | 'done';
   priority?: 'low' | 'medium' | 'high';  // 可选优先级
   rawCommand?: string;     // 原始语音/文本指令
+  
+  // 同步元数据 (Day 1 必须)
+  version: number;         // 乐观锁版本号
   createdAt: string;       // 创建时间
   updatedAt: string;       // 最后修改时间
+  deletedAt?: string;      // 软删除时间戳
+  
+  // 所有权 (Day 1 必须)
+  ownerId?: string;        // 用户ID (未登录为 undefined)
+  createdBy: string;       // 创建设备ID
+  updatedBy: string;       // 最后修改设备ID
 }
 
 // 项目实体 (对应Tab)
@@ -316,8 +485,18 @@ interface SyntropyProject {
   name: string;            // 项目/Tab名称
   order: number;           // 排序权重
   color?: string;          // 可选：标识色 (#HEX)
-  createdAt: string;
   isArchived: boolean;     // 是否归档
+  
+  // 同步元数据 (Day 1 必须)
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  
+  // 所有权 (Day 1 必须)
+  ownerId?: string;
+  createdBy: string;
+  updatedBy: string;
 }
 
 // 用户设置
@@ -379,24 +558,36 @@ interface CloudSyncStatus {
 #### IndexedDB 表结构
 
 ```typescript
-// Dexie.js Schema
+// Dexie.js Schema (同步就绪版)
 const db = new Dexie('SyntropyDB');
+
+// v1: 基础版本 (包含同步字段)
 db.version(1).stores({
-  tasks: 'id, projectId, status, createdAt, updatedAt',
-  projects: 'id, order, isArchived',
+  tasks: 'id, projectId, status, ownerId, updatedAt, deletedAt',
+  projects: 'id, order, ownerId, isArchived, deletedAt',
   settings: 'id',
-  syncRecords: 'id, timestamp, projectId',
-  actionLogs: 'id, timestamp, canUndo'
+  operations: 'id, entityId, timestamp, syncStatus, [syncStatus+timestamp]',
+  conflicts: 'id, entityId, resolution, createdAt',
+  syncMeta: 'id',
+  counters: 'id',
+  deviceInfo: 'id',
+  apiKeys: 'id',
+  securityEvents: 'id, type, timestamp'
 });
 
-// Phase 5 扩展
+// v2: Phase 5 扩展 (云同步)
 db.version(2).stores({
-  tasks: 'id, projectId, status, createdAt, updatedAt',
-  projects: 'id, order, isArchived',
+  tasks: 'id, projectId, status, ownerId, updatedAt, deletedAt',
+  projects: 'id, order, ownerId, isArchived, deletedAt',
   settings: 'id',
-  syncRecords: 'id, timestamp, projectId',
-  actionLogs: 'id, timestamp, canUndo',
-  cloudSync: 'id'  // 云同步状态
+  operations: 'id, entityId, timestamp, syncStatus, [syncStatus+timestamp]',
+  conflicts: 'id, entityId, resolution, createdAt',
+  syncMeta: 'id',
+  counters: 'id',
+  deviceInfo: 'id',
+  apiKeys: 'id',
+  securityEvents: 'id, type, timestamp',
+  cloudSync: 'id'
 });
 ```
 
@@ -408,6 +599,10 @@ db.version(2).stores({
 | 项目 | `PROJ-{4位随机}` | PROJ-A7X2 |
 | 同步记录 | `SYNC-{时间戳}` | SYNC-1737100800000 |
 | 操作日志 | `ACT-{时间戳}` | ACT-1737100800000 |
+| 设备 | `DEV-{UUID短码}` | DEV-a7x2k9m3 |
+| 操作 | `OP-{设备}-{时间戳}-{序号}` | OP-a7x2-1737100800000-001 |
+
+> 📘 详细的 ID 策略、操作日志格式、冲突解决机制请参阅 [docs/SYNC-SPEC.md](./docs/SYNC-SPEC.md)
 
 ### 5.3 异常处理策略 (Error Handling)
 
@@ -616,3 +811,63 @@ Week 9-10: Phase 5 用户系统（可选扩展）
 * [ ] 实现云端 → 本地数据恢复功能。
 * [ ] 开发个人资料管理页面。
 * [ ] 同步状态指示器与冲突解决。
+
+---
+
+## 📋 9. Phase 1 验收测试 (Acceptance Tests)
+
+> 以下测试用例必须在 Phase 1 完成前全部通过
+
+### 9.1 核心功能测试
+
+| 测试ID | 场景 | 预期结果 | 优先级 |
+|--------|------|----------|--------|
+| T1-01 | 创建新任务 | 任务出现在列表，分配唯一 SYN-XXXX ID | P0 |
+| T1-02 | 编辑任务内容 | 内容更新，updatedAt 变化，version +1 | P0 |
+| T1-03 | 删除任务 | 任务从列表消失，deletedAt 被设置 | P0 |
+| T1-04 | 标记任务完成 | status 变为 done，UI 显示完成状态 | P0 |
+| T1-05 | 创建新项目 | Tab 出现，可切换 | P0 |
+| T1-06 | 切换项目 Tab | 显示对应项目的任务 | P0 |
+| T1-07 | 导出 Excel | 下载 .xlsx，包含 ID 列和所有任务 | P0 |
+
+### 9.2 数据持久化测试
+
+| 测试ID | 场景 | 预期结果 | 优先级 |
+|--------|------|----------|--------|
+| T1-08 | 刷新页面 | 所有数据保留 | P0 |
+| T1-09 | 关闭浏览器重开 | 所有数据保留 | P0 |
+| T1-10 | IndexedDB 写入验证 | 数据正确存储在 SyntropyDB | P0 |
+| T1-11 | 设备 ID 持久化 | 刷新后 deviceId 不变 | P0 |
+
+### 9.3 数据模型测试
+
+| 测试ID | 场景 | 预期结果 | 优先级 |
+|--------|------|----------|--------|
+| T1-12 | 任务包含同步字段 | version, createdBy, updatedBy 正确设置 | P0 |
+| T1-13 | ID 格式正确 | 任务 SYN-2026-XXXX，项目 PROJ-XXXX | P0 |
+| T1-14 | 操作日志记录 | 每次变更写入 operations 表 | P1 |
+
+### 9.4 不变式验证 (Invariants)
+
+```typescript
+// 这些条件必须始终为真
+const Phase1Invariants = [
+  '每个任务有且仅有一个唯一 ID',
+  '每个任务必须属于一个项目',
+  '删除的任务 deletedAt 不为空',
+  '所有时间戳使用 ISO 8601 格式',
+  '设备 ID 在会话间保持稳定',
+  '数据变更后 version 递增',
+  'updatedAt >= createdAt 恒成立'
+];
+```
+
+---
+
+## 📚 10. 相关文档
+
+| 文档 | 说明 |
+|------|------|
+| [plan.md](./plan.md) | 开发计划 - 详细任务分解与时间表 |
+| [docs/SYNC-SPEC.md](./docs/SYNC-SPEC.md) | 数据与同步契约 - ID策略、操作日志、冲突解决 |
+| [docs/SECURITY-SPEC.md](./docs/SECURITY-SPEC.md) | 安全规范 - BYOK、加密、威胁模型、CSP |
