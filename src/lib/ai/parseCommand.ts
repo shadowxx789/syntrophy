@@ -3,9 +3,14 @@
  * 将自然语言转换为结构化任务操作
  */
 
-import type { ParsedCommand, AIAction, SyntropyTask } from "@/types";
+import type { ParsedCommand, AIAction, SyntropyTask, CustomPromptConfig } from "@/types";
 import { callAI, type AIServiceConfig } from "./service";
-import { generateSystemPrompt, generateUserPrompt, generateContextPrompt } from "./prompts";
+import {
+  generateSystemPrompt,
+  generateUserPrompt,
+  generateContextPrompt,
+  getActivePrompts,
+} from "./prompts";
 
 /**
  * AI 解析结果原始格式
@@ -29,12 +34,14 @@ interface AIParseResult {
  * @param input 用户输入的自然语言
  * @param config AI 服务配置
  * @param existingTasks 现有任务列表（用于 UPDATE/DELETE 上下文）
+ * @param customPrompts 自定义提示词配置
  * @returns 解析后的结构化命令
  */
 export async function parseCommand(
   input: string,
   config: AIServiceConfig,
-  existingTasks?: Pick<SyntropyTask, "id" | "content">[]
+  existingTasks?: Pick<SyntropyTask, "id" | "content">[],
+  customPrompts?: CustomPromptConfig
 ): Promise<ParsedCommand> {
   const trimmedInput = input.trim();
 
@@ -55,10 +62,13 @@ export async function parseCommand(
 
   // 调用 AI 解析
   try {
-    const systemPrompt = generateSystemPrompt();
+    // 获取当前生效的提示词模板
+    const prompts = getActivePrompts(customPrompts);
+
+    const systemPrompt = generateSystemPrompt(prompts.systemPrompt);
     const userPrompt = existingTasks?.length
-      ? generateContextPrompt(trimmedInput, existingTasks)
-      : generateUserPrompt(trimmedInput);
+      ? generateContextPrompt(trimmedInput, existingTasks, prompts.contextPromptTemplate)
+      : generateUserPrompt(trimmedInput, prompts.userPromptTemplate);
 
     const response = await callAI(
       [
@@ -207,25 +217,21 @@ function normalizeResult(result: AIParseResult, rawInput: string): ParsedCommand
 /**
  * 查找匹配的任务（用于 UPDATE/DELETE）
  */
-export function findMatchingTask(
-  description: string,
-  tasks: SyntropyTask[]
-): SyntropyTask | null {
+export function findMatchingTask(description: string, tasks: SyntropyTask[]): SyntropyTask | null {
   if (!description || tasks.length === 0) return null;
 
   const lowerDesc = description.toLowerCase();
 
   // 精确 ID 匹配
-  const idMatch = tasks.find((t) =>
-    t.id.toLowerCase() === lowerDesc ||
-    lowerDesc.includes(t.id.toLowerCase())
+  const idMatch = tasks.find(
+    (t) => t.id.toLowerCase() === lowerDesc || lowerDesc.includes(t.id.toLowerCase())
   );
   if (idMatch) return idMatch;
 
   // 内容模糊匹配
-  const contentMatch = tasks.find((t) =>
-    t.content.toLowerCase().includes(lowerDesc) ||
-    lowerDesc.includes(t.content.toLowerCase())
+  const contentMatch = tasks.find(
+    (t) =>
+      t.content.toLowerCase().includes(lowerDesc) || lowerDesc.includes(t.content.toLowerCase())
   );
   if (contentMatch) return contentMatch;
 
@@ -233,7 +239,11 @@ export function findMatchingTask(
   const orderMatch = description.match(/第?(\d+|一|二|三|四|五)/);
   if (orderMatch) {
     const numMap: Record<string, number> = {
-      一: 1, 二: 2, 三: 3, 四: 4, 五: 5,
+      一: 1,
+      二: 2,
+      三: 3,
+      四: 4,
+      五: 5,
     };
     const index = numMap[orderMatch[1]] || parseInt(orderMatch[1]) || 0;
     if (index > 0 && index <= tasks.length) {

@@ -1,11 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Eye, EyeOff, Check, Loader2, AlertCircle, ChevronDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  Check,
+  Loader2,
+  AlertCircle,
+  ChevronDown,
+  RotateCcw,
+} from "lucide-react";
 import Link from "next/link";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,18 +26,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "@/lib/crypto";
 import { validateApiKey, COMMON_CUSTOM_PROVIDERS, getProviderDisplayName } from "@/lib/ai";
-import type { AIProvider } from "@/types";
+import {
+  PROMPT_PRESETS,
+  DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_USER_PROMPT_TEMPLATE,
+  DEFAULT_CONTEXT_PROMPT_TEMPLATE,
+} from "@/lib/ai/prompts";
+import type { AIProvider, PromptPreset } from "@/types";
 
 export default function SettingsPage() {
   const {
     aiProvider,
     encryptedApiKey,
     customAIConfig,
+    customPrompts,
     theme,
     deviceId,
     setAIProvider,
     setEncryptedApiKey,
     setCustomAIConfig,
+    setCustomPrompts,
+    resetPrompts,
     setTheme,
   } = useSettingsStore();
 
@@ -40,6 +60,19 @@ export default function SettingsPage() {
   const [customName, setCustomName] = useState(customAIConfig?.name || "");
   const [customBaseUrl, setCustomBaseUrl] = useState(customAIConfig?.baseUrl || "");
   const [customModel, setCustomModel] = useState(customAIConfig?.model || "");
+
+  // 提示词配置状态
+  const [promptsEnabled, setPromptsEnabled] = useState(customPrompts?.enabled ?? false);
+  const [currentPreset, setCurrentPreset] = useState<PromptPreset>(
+    customPrompts?.preset ?? "default"
+  );
+  const [systemPrompt, setSystemPrompt] = useState(customPrompts?.systemPrompt ?? "");
+  const [userPromptTemplate, setUserPromptTemplate] = useState(
+    customPrompts?.userPromptTemplate ?? ""
+  );
+  const [contextPromptTemplate, setContextPromptTemplate] = useState(
+    customPrompts?.contextPromptTemplate ?? ""
+  );
 
   // 加载已保存的 API Key 掩码
   useEffect(() => {
@@ -67,6 +100,17 @@ export default function SettingsPage() {
     }
   }, [customAIConfig]);
 
+  // 当 customPrompts 变化时同步表单
+  useEffect(() => {
+    if (customPrompts) {
+      setPromptsEnabled(customPrompts.enabled);
+      setCurrentPreset(customPrompts.preset);
+      setSystemPrompt(customPrompts.systemPrompt ?? "");
+      setUserPromptTemplate(customPrompts.userPromptTemplate ?? "");
+      setContextPromptTemplate(customPrompts.contextPromptTemplate ?? "");
+    }
+  }, [customPrompts]);
+
   // 切换提供商
   const handleProviderChange = (provider: AIProvider) => {
     setAIProvider(provider);
@@ -80,7 +124,7 @@ export default function SettingsPage() {
   };
 
   // 选择预设的自定义提供商
-  const handleSelectPreset = (preset: typeof COMMON_CUSTOM_PROVIDERS[number]) => {
+  const handleSelectPreset = (preset: (typeof COMMON_CUSTOM_PROVIDERS)[number]) => {
     setCustomName(preset.name);
     setCustomBaseUrl(preset.baseUrl);
     setCustomModel(preset.model);
@@ -126,11 +170,14 @@ export default function SettingsPage() {
       const isValid = await validateApiKey({
         provider: aiProvider,
         apiKey: apiKeyInput.trim(),
-        customConfig: aiProvider === "custom" ? {
-          name: customName.trim() || "自定义",
-          baseUrl: customBaseUrl.trim(),
-          model: customModel.trim(),
-        } : undefined,
+        customConfig:
+          aiProvider === "custom"
+            ? {
+                name: customName.trim() || "自定义",
+                baseUrl: customBaseUrl.trim(),
+                model: customModel.trim(),
+              }
+            : undefined,
       });
 
       if (isValid) {
@@ -157,6 +204,62 @@ export default function SettingsPage() {
     setMaskedKey("");
     setApiKeyInput("");
     setValidationResult(null);
+  };
+
+  // 切换提示词自定义开关
+  const handleTogglePrompts = (enabled: boolean) => {
+    setPromptsEnabled(enabled);
+    if (enabled) {
+      setCustomPrompts({
+        enabled: true,
+        preset: currentPreset,
+        systemPrompt: currentPreset === "custom" ? systemPrompt : undefined,
+        userPromptTemplate: currentPreset === "custom" ? userPromptTemplate : undefined,
+        contextPromptTemplate: currentPreset === "custom" ? contextPromptTemplate : undefined,
+      });
+    } else {
+      setCustomPrompts(undefined);
+    }
+  };
+
+  // 选择提示词预设
+  const handleSelectPromptPreset = (preset: PromptPreset) => {
+    setCurrentPreset(preset);
+    if (preset !== "custom") {
+      // 使用预设模板
+      const presetTemplate = PROMPT_PRESETS[preset];
+      setSystemPrompt(presetTemplate.systemPrompt);
+      setUserPromptTemplate(presetTemplate.userPromptTemplate);
+      setContextPromptTemplate(presetTemplate.contextPromptTemplate);
+    }
+    setCustomPrompts({
+      enabled: true,
+      preset,
+      systemPrompt: preset === "custom" ? systemPrompt : undefined,
+      userPromptTemplate: preset === "custom" ? userPromptTemplate : undefined,
+      contextPromptTemplate: preset === "custom" ? contextPromptTemplate : undefined,
+    });
+  };
+
+  // 保存自定义提示词
+  const handleSavePrompts = () => {
+    setCustomPrompts({
+      enabled: true,
+      preset: "custom",
+      systemPrompt: systemPrompt.trim() || undefined,
+      userPromptTemplate: userPromptTemplate.trim() || undefined,
+      contextPromptTemplate: contextPromptTemplate.trim() || undefined,
+    });
+  };
+
+  // 重置提示词为默认
+  const handleResetPrompts = () => {
+    resetPrompts();
+    setPromptsEnabled(false);
+    setCurrentPreset("default");
+    setSystemPrompt("");
+    setUserPromptTemplate("");
+    setContextPromptTemplate("");
   };
 
   const providerDisplayName = getProviderDisplayName(aiProvider, customAIConfig);
@@ -211,15 +314,10 @@ export default function SettingsPage() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {COMMON_CUSTOM_PROVIDERS.map((preset) => (
-                    <DropdownMenuItem
-                      key={preset.name}
-                      onClick={() => handleSelectPreset(preset)}
-                    >
+                    <DropdownMenuItem key={preset.name} onClick={() => handleSelectPreset(preset)}>
                       <div className="flex flex-col">
                         <span>{preset.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {preset.model}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{preset.model}</span>
                       </div>
                     </DropdownMenuItem>
                   ))}
@@ -311,22 +409,11 @@ export default function SettingsPage() {
                   className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
                   onClick={() => setShowApiKey(!showApiKey)}
                 >
-                  {showApiKey ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
-              <Button
-                onClick={handleSaveApiKey}
-                disabled={!apiKeyInput.trim() || isValidating}
-              >
-                {isValidating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "验证并保存"
-                )}
+              <Button onClick={handleSaveApiKey} disabled={!apiKeyInput.trim() || isValidating}>
+                {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "验证并保存"}
               </Button>
             </div>
 
@@ -345,10 +432,124 @@ export default function SettingsPage() {
             )}
 
             <p className="text-xs text-muted-foreground">
-              API Key 使用设备指纹加密存储在本地，不会上传到服务器。
-              切换设备需要重新配置。
+              API Key 使用设备指纹加密存储在本地，不会上传到服务器。 切换设备需要重新配置。
             </p>
           </div>
+        </section>
+
+        {/* AI 提示词配置 */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">AI 提示词配置</h2>
+            <div className="flex items-center gap-2">
+              <Switch checked={promptsEnabled} onCheckedChange={handleTogglePrompts} />
+              <span className="text-sm text-muted-foreground">自定义</span>
+            </div>
+          </div>
+
+          {promptsEnabled && (
+            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+              {/* 预设选择 */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">提示词模式</label>
+                <div className="flex flex-wrap gap-2">
+                  {(Object.keys(PROMPT_PRESETS) as Exclude<PromptPreset, "custom">[]).map((key) => (
+                    <Button
+                      key={key}
+                      variant={currentPreset === key ? "default" : "outline"}
+                      onClick={() => handleSelectPromptPreset(key)}
+                      size="sm"
+                    >
+                      {PROMPT_PRESETS[key].name}
+                    </Button>
+                  ))}
+                  <Button
+                    variant={currentPreset === "custom" ? "default" : "outline"}
+                    onClick={() => handleSelectPromptPreset("custom")}
+                    size="sm"
+                  >
+                    自定义
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {currentPreset === "custom"
+                    ? "完全自定义提示词内容"
+                    : PROMPT_PRESETS[currentPreset as Exclude<PromptPreset, "custom">]?.description}
+                </p>
+              </div>
+
+              {/* 自定义编辑区 */}
+              {currentPreset === "custom" && (
+                <div className="space-y-4 border-t pt-4">
+                  {/* 系统提示词 */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">系统提示词</label>
+                    <Textarea
+                      rows={10}
+                      value={systemPrompt}
+                      onChange={(e) => setSystemPrompt(e.target.value)}
+                      placeholder={DEFAULT_SYSTEM_PROMPT.slice(0, 200) + "..."}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      定义 AI 角色和输出格式。可用变量：
+                      <code className="mx-1 rounded bg-muted px-1">{"{{CURRENT_DATE}}"}</code>
+                      <code className="rounded bg-muted px-1">{"{{WEEKDAY}}"}</code>
+                    </p>
+                  </div>
+
+                  {/* 用户提示词模板 */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">用户提示词模板</label>
+                    <Textarea
+                      rows={4}
+                      value={userPromptTemplate}
+                      onChange={(e) => setUserPromptTemplate(e.target.value)}
+                      placeholder={DEFAULT_USER_PROMPT_TEMPLATE}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      单条指令解析模板。可用变量：
+                      <code className="rounded bg-muted px-1">{"{{USER_INPUT}}"}</code>
+                    </p>
+                  </div>
+
+                  {/* 上下文提示词模板 */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">上下文提示词模板</label>
+                    <Textarea
+                      rows={6}
+                      value={contextPromptTemplate}
+                      onChange={(e) => setContextPromptTemplate(e.target.value)}
+                      placeholder={DEFAULT_CONTEXT_PROMPT_TEMPLATE}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      带任务列表的解析模板。可用变量：
+                      <code className="mx-1 rounded bg-muted px-1">{"{{TASK_LIST}}"}</code>
+                      <code className="rounded bg-muted px-1">{"{{USER_INPUT}}"}</code>
+                    </p>
+                  </div>
+
+                  {/* 保存按钮 */}
+                  <Button onClick={handleSavePrompts} size="sm">
+                    保存提示词
+                  </Button>
+                </div>
+              )}
+
+              {/* 恢复默认按钮 */}
+              <div className="flex items-center justify-between border-t pt-4">
+                <p className="text-xs text-muted-foreground">
+                  提示词决定了 AI 如何理解你的指令并提取任务信息。
+                </p>
+                <Button variant="outline" size="sm" onClick={handleResetPrompts} className="gap-1">
+                  <RotateCcw className="h-3 w-3" />
+                  恢复默认
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* 主题设置 */}
@@ -399,9 +600,7 @@ export default function SettingsPage() {
               清除所有数据
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            数据管理功能将在后续版本中提供。
-          </p>
+          <p className="text-xs text-muted-foreground">数据管理功能将在后续版本中提供。</p>
         </section>
 
         {/* 关于 */}

@@ -17,11 +17,7 @@ interface CommandInputProps {
   onTaskDeleted?: (task: SyntropyTask) => void;
 }
 
-export function CommandInput({
-  onTaskCreated,
-  onTaskUpdated,
-  onTaskDeleted,
-}: CommandInputProps) {
+export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: CommandInputProps) {
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(true);
@@ -31,7 +27,7 @@ export function CommandInput({
 
   const { tasks, createTask, updateTask, deleteTask } = useTaskStore();
   const { currentProjectId } = useProjectStore();
-  const { aiProvider, encryptedApiKey, customAIConfig } = useSettingsStore();
+  const { aiProvider, encryptedApiKey, customAIConfig, customPrompts } = useSettingsStore();
 
   const handleSubmit = async () => {
     const trimmedInput = input.trim();
@@ -55,7 +51,8 @@ export function CommandInput({
               apiKey,
               customConfig: aiProvider === "custom" ? customAIConfig : undefined,
             },
-            tasks.map((t) => ({ id: t.id, content: t.content }))
+            tasks.map((t) => ({ id: t.id, content: t.content })),
+            customPrompts
           );
           setLastParsed(parsedCommand);
         } catch (aiError) {
@@ -113,9 +110,7 @@ export function CommandInput({
 
       case "UPDATE": {
         // 查找目标任务
-        const targetTask = command.targetId
-          ? findMatchingTask(command.targetId, tasks)
-          : tasks[0]; // 默认最新的任务
+        const targetTask = command.targetId ? findMatchingTask(command.targetId, tasks) : tasks[0]; // 默认最新的任务
 
         if (!targetTask) {
           throw new Error("找不到要修改的任务");
@@ -140,9 +135,7 @@ export function CommandInput({
 
       case "DELETE": {
         // 查找目标任务
-        const targetTask = command.targetId
-          ? findMatchingTask(command.targetId, tasks)
-          : null;
+        const targetTask = command.targetId ? findMatchingTask(command.targetId, tasks) : null;
 
         if (!targetTask) {
           throw new Error("找不到要删除的任务");
@@ -178,7 +171,7 @@ export function CommandInput({
   const hasApiKey = !!encryptedApiKey;
 
   return (
-    <div className="border-t bg-background p-4 safe-area-inset-bottom">
+    <div className="safe-area-inset-bottom border-t bg-background p-4">
       {/* Error Display */}
       {error && (
         <div className="mb-2 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -201,9 +194,11 @@ export function CommandInput({
                 : "AI parsing disabled"
               : "Please configure API Key in settings"
           }
-          className="shrink-0 h-11 w-11 sm:h-10 sm:w-10 touch-manipulation"
+          className="h-11 w-11 shrink-0 touch-manipulation sm:h-10 sm:w-10"
         >
-          <Sparkles className={`h-5 w-5 sm:h-4 sm:w-4 ${aiEnabled && hasApiKey ? "" : "opacity-50"}`} />
+          <Sparkles
+            className={`h-5 w-5 sm:h-4 sm:w-4 ${aiEnabled && hasApiKey ? "" : "opacity-50"}`}
+          />
         </Button>
 
         {/* Input - taller on mobile for easier touch */}
@@ -213,22 +208,20 @@ export function CommandInput({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
-            aiEnabled && hasApiKey
-              ? "Enter natural language command..."
-              : "Enter task content..."
+            aiEnabled && hasApiKey ? "Enter natural language command..." : "Enter task content..."
           }
           disabled={isProcessing}
-          className="flex-1 h-11 sm:h-10 text-base sm:text-sm touch-manipulation"
+          className="h-11 flex-1 touch-manipulation text-base sm:h-10 sm:text-sm"
         />
 
         {/* Submit Button - larger touch target on mobile */}
-        <Button 
-          onClick={handleSubmit} 
+        <Button
+          onClick={handleSubmit}
           disabled={!input.trim() || isProcessing}
-          className="h-11 px-4 sm:h-10 sm:px-4 touch-manipulation"
+          className="h-11 touch-manipulation px-4 sm:h-10 sm:px-4"
         >
           {isProcessing ? (
-            <Loader2 className="h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin sm:h-4 sm:w-4" />
           ) : (
             <>
               <Send className="mr-1 h-5 w-5 sm:h-4 sm:w-4" />
@@ -239,7 +232,7 @@ export function CommandInput({
       </div>
 
       {/* AI Status - hidden on mobile to save space */}
-      <div className="mt-2 hidden sm:flex items-center justify-between text-xs text-muted-foreground">
+      <div className="mt-2 hidden items-center justify-between text-xs text-muted-foreground sm:flex">
         <span>
           {aiEnabled && hasApiKey ? (
             <>

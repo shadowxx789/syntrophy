@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Settings, AIProvider, CustomAIConfig } from "@/types";
+import type {
+  Settings,
+  AIProvider,
+  CustomAIConfig,
+  CustomPromptConfig,
+  PromptPreset,
+} from "@/types";
 import { getOrCreateDeviceId } from "@/lib/generateId";
 
 interface SettingsState extends Settings {
@@ -20,6 +26,15 @@ interface SettingsState extends Settings {
   /** 设置主题 */
   setTheme: (theme: "light" | "dark" | "system") => void;
 
+  /** 设置自定义提示词配置 */
+  setCustomPrompts: (config: CustomPromptConfig | undefined) => void;
+
+  /** 设置提示词预设 */
+  setPromptPreset: (preset: PromptPreset) => void;
+
+  /** 重置提示词为默认 */
+  resetPrompts: () => void;
+
   /** 初始化设置 (从存储加载后调用) */
   initialize: () => void;
 }
@@ -31,6 +46,7 @@ export const useSettingsStore = create<SettingsState>()(
       aiProvider: "openai",
       encryptedApiKey: undefined,
       customAIConfig: undefined,
+      customPrompts: undefined,
       theme: "system",
       deviceId: "",
 
@@ -44,6 +60,27 @@ export const useSettingsStore = create<SettingsState>()(
 
       setCustomAIConfig: (config) => {
         set({ customAIConfig: config });
+      },
+
+      setCustomPrompts: (config) => {
+        set({ customPrompts: config });
+      },
+
+      setPromptPreset: (preset) => {
+        const current = get().customPrompts;
+        set({
+          customPrompts: {
+            enabled: true,
+            preset,
+            systemPrompt: current?.systemPrompt,
+            userPromptTemplate: current?.userPromptTemplate,
+            contextPromptTemplate: current?.contextPromptTemplate,
+          },
+        });
+      },
+
+      resetPrompts: () => {
+        set({ customPrompts: undefined });
       },
 
       setTheme: (theme) => {
@@ -89,6 +126,7 @@ export const useSettingsStore = create<SettingsState>()(
         aiProvider: state.aiProvider,
         encryptedApiKey: state.encryptedApiKey,
         customAIConfig: state.customAIConfig,
+        customPrompts: state.customPrompts,
         theme: state.theme,
         deviceId: state.deviceId,
       }),

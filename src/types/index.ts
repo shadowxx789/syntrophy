@@ -213,6 +213,45 @@ export interface SyncStatus {
 }
 
 // ============================================================================
+// AI 提示词相关类型
+// ============================================================================
+
+/** 提示词预设类型 */
+export type PromptPreset = "default" | "concise" | "detailed" | "custom";
+
+/** 单个预设模板的结构 */
+export interface PromptTemplate {
+  /** 预设名称 */
+  name: string;
+  /** 预设描述 */
+  description: string;
+  /** 系统提示词 */
+  systemPrompt: string;
+  /** 用户提示词模板 */
+  userPromptTemplate: string;
+  /** 上下文提示词模板 */
+  contextPromptTemplate: string;
+}
+
+/** 自定义提示词配置 */
+export interface CustomPromptConfig {
+  /** 是否启用自定义提示词 */
+  enabled: boolean;
+
+  /** 当前使用的预设 */
+  preset: PromptPreset;
+
+  /** 自定义系统提示词 (preset === "custom" 时生效) */
+  systemPrompt?: string;
+
+  /** 自定义用户提示词模板 (preset === "custom" 时生效) */
+  userPromptTemplate?: string;
+
+  /** 自定义上下文提示词模板 (preset === "custom" 时生效) */
+  contextPromptTemplate?: string;
+}
+
+// ============================================================================
 // AI 解析相关类型 (Phase 2 预留)
 // ============================================================================
 
@@ -272,6 +311,9 @@ export interface Settings {
 
   /** 自定义 AI 配置 (当 aiProvider === "custom" 时使用) */
   customAIConfig?: CustomAIConfig;
+
+  /** 自定义 AI 提示词配置 */
+  customPrompts?: CustomPromptConfig;
 
   /** 主题模式 */
   theme: "light" | "dark" | "system";
