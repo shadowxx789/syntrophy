@@ -9,3 +9,4 @@ export type { AIMessage, AIResponse, AIServiceConfig } from "./service";
 export { parseCommand, findMatchingTask, findTaskCandidates } from "./parseCommand";
 export type { TaskMatchCandidate, TaskMatchResult, TaskMatchReason } from "./parseCommand";
 export { generateSystemPrompt, generateUserPrompt, generateContextPrompt } from "./prompts";
+export { callGemini, convertMessagesToGemini, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from "./gemini";

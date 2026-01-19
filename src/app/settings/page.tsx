@@ -25,7 +25,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "@/lib/crypto";
-import { validateApiKey, COMMON_CUSTOM_PROVIDERS, getProviderDisplayName } from "@/lib/ai";
+import {
+  validateApiKey,
+  COMMON_CUSTOM_PROVIDERS,
+  getProviderDisplayName,
+  GEMINI_MODELS,
+  DEFAULT_GEMINI_MODEL,
+} from "@/lib/ai";
 import {
   PROMPT_PRESETS,
   DEFAULT_SYSTEM_PROMPT,
@@ -39,12 +45,14 @@ export default function SettingsPage() {
     aiProvider,
     encryptedApiKey,
     customAIConfig,
+    geminiModel,
     customPrompts,
     theme,
     deviceId,
     setAIProvider,
     setEncryptedApiKey,
     setCustomAIConfig,
+    setGeminiModel,
     setCustomPrompts,
     resetPrompts,
     setTheme,
@@ -170,6 +178,7 @@ export default function SettingsPage() {
       const isValid = await validateApiKey({
         provider: aiProvider,
         apiKey: apiKeyInput.trim(),
+        model: aiProvider === "gemini" ? geminiModel || DEFAULT_GEMINI_MODEL : undefined,
         customConfig:
           aiProvider === "custom"
             ? {
@@ -285,14 +294,18 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">AI 服务商</label>
             <div className="flex flex-wrap gap-2">
-              {(["openai", "deepseek"] as AIProvider[]).map((provider) => (
+              {(["openai", "deepseek", "gemini"] as AIProvider[]).map((provider) => (
                 <Button
                   key={provider}
                   variant={aiProvider === provider ? "default" : "outline"}
                   onClick={() => handleProviderChange(provider)}
                   size="sm"
                 >
-                  {provider === "openai" ? "OpenAI" : "DeepSeek"}
+                  {provider === "openai"
+                    ? "OpenAI"
+                    : provider === "deepseek"
+                      ? "DeepSeek"
+                      : "Gemini"}
                 </Button>
               ))}
 
@@ -374,6 +387,31 @@ export default function SettingsPage() {
 
               <p className="text-xs text-muted-foreground">
                 支持所有 OpenAI Chat Completions API 兼容的服务。
+              </p>
+            </div>
+          )}
+
+          {/* Gemini 模型选择 */}
+          {aiProvider === "gemini" && (
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+              <h3 className="text-sm font-medium">Gemini 模型</h3>
+              <div className="flex flex-wrap gap-2">
+                {GEMINI_MODELS.map((model) => (
+                  <Button
+                    key={model.id}
+                    variant={
+                      (geminiModel || DEFAULT_GEMINI_MODEL) === model.id ? "default" : "outline"
+                    }
+                    onClick={() => setGeminiModel(model.id)}
+                    size="sm"
+                  >
+                    {model.name}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                当前模型:{" "}
+                <code className="rounded bg-muted px-1">{geminiModel || DEFAULT_GEMINI_MODEL}</code>
               </p>
             </div>
           )}

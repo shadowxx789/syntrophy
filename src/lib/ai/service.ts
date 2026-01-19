@@ -33,7 +33,7 @@ export interface AIServiceConfig {
  * 预设 AI 服务提供商配置
  */
 const PRESET_PROVIDERS: Record<
-  Exclude<AIProvider, "custom">,
+  Exclude<AIProvider, "custom" | "gemini">,
   { baseUrl: string; defaultModel: string }
 > = {
   openai: {
@@ -104,6 +104,11 @@ function getProviderConfig(config: AIServiceConfig): {
     };
   }
 
+  if (config.provider === "gemini") {
+    // Gemini 使用单独的适配器，这里不应该被调用
+    throw new Error("Gemini 应使用 callGemini 而非 callAI");
+  }
+
   const preset = PRESET_PROVIDERS[config.provider];
   return {
     baseUrl: preset.baseUrl,
@@ -111,13 +116,17 @@ function getProviderConfig(config: AIServiceConfig): {
   };
 }
 
+import { callGemini, validateGeminiApiKey } from "./gemini";
+
 /**
- * 调用 AI API (OpenAI 兼容格式)
+ * 调用 AI API (OpenAI 兼容格式，Gemini 使用单独适配器)
  */
-export async function callAI(
-  messages: AIMessage[],
-  config: AIServiceConfig
-): Promise<AIResponse> {
+export async function callAI(messages: AIMessage[], config: AIServiceConfig): Promise<AIResponse> {
+  // Gemini 使用单独的适配器
+  if (config.provider === "gemini") {
+    return callGemini(messages, config);
+  }
+
   const { baseUrl, model } = getProviderConfig(config);
 
   const requestBody: Record<string, unknown> = {
@@ -144,11 +153,7 @@ export async function callAI(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new AIError(
-      `AI API 调用失败: ${response.status}`,
-      response.status,
-      error
-    );
+    throw new AIError(`AI API 调用失败: ${response.status}`, response.status, error);
   }
 
   const data = await response.json();
@@ -194,10 +199,13 @@ export class AIError extends Error {
 /**
  * 验证 API Key 是否有效
  */
-export async function validateApiKey(
-  config: AIServiceConfig
-): Promise<boolean> {
+export async function validateApiKey(config: AIServiceConfig): Promise<boolean> {
   try {
+    // Gemini 使用单独的验证逻辑
+    if (config.provider === "gemini") {
+      return await validateGeminiApiKey(config.apiKey, config.model);
+    }
+
     await callAI(
       [
         { role: "system", content: "Say OK" },
@@ -229,6 +237,7 @@ export function getProviderDisplayName(
   const names: Record<AIProvider, string> = {
     openai: "OpenAI",
     deepseek: "DeepSeek",
+    gemini: "Gemini",
     custom: "自定义",
   };
 

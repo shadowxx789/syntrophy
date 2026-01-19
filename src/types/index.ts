@@ -286,7 +286,7 @@ export interface DiffResult {
 // 设置相关类型
 // ============================================================================
 
-export type AIProvider = "openai" | "deepseek" | "custom";
+export type AIProvider = "openai" | "deepseek" | "gemini" | "custom";
 
 /**
  * 自定义 AI 提供商配置
@@ -311,6 +311,9 @@ export interface Settings {
 
   /** 自定义 AI 配置 (当 aiProvider === "custom" 时使用) */
   customAIConfig?: CustomAIConfig;
+
+  /** Gemini 模型 (当 aiProvider === "gemini" 时使用) */
+  geminiModel?: string;
 
   /** 自定义 AI 提示词配置 */
   customPrompts?: CustomPromptConfig;

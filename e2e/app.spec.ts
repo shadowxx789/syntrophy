@@ -87,6 +87,18 @@ test.describe("Settings Page", () => {
     // Should see provider buttons
     await expect(page.getByRole("button", { name: /OpenAI/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /DeepSeek/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Gemini/i })).toBeVisible();
+  });
+
+  test("should show Gemini model selection when Gemini is selected", async ({ page }) => {
+    await page.goto("/settings");
+
+    // Click Gemini button
+    await page.getByRole("button", { name: /Gemini/i }).click();
+
+    // Should see Gemini model options
+    await expect(page.getByText(/Gemini 模型/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Gemini 3 Flash/i })).toBeVisible();
   });
 
   test("should display theme options", async ({ page }) => {

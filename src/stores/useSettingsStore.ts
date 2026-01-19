@@ -23,6 +23,9 @@ interface SettingsState extends Settings {
   /** 设置自定义 AI 配置 */
   setCustomAIConfig: (config: CustomAIConfig | undefined) => void;
 
+  /** 设置 Gemini 模型 */
+  setGeminiModel: (model: string) => void;
+
   /** 设置主题 */
   setTheme: (theme: "light" | "dark" | "system") => void;
 
@@ -46,6 +49,7 @@ export const useSettingsStore = create<SettingsState>()(
       aiProvider: "openai",
       encryptedApiKey: undefined,
       customAIConfig: undefined,
+      geminiModel: undefined,
       customPrompts: undefined,
       theme: "system",
       deviceId: "",
@@ -60,6 +64,10 @@ export const useSettingsStore = create<SettingsState>()(
 
       setCustomAIConfig: (config) => {
         set({ customAIConfig: config });
+      },
+
+      setGeminiModel: (model) => {
+        set({ geminiModel: model });
       },
 
       setCustomPrompts: (config) => {
@@ -126,6 +134,7 @@ export const useSettingsStore = create<SettingsState>()(
         aiProvider: state.aiProvider,
         encryptedApiKey: state.encryptedApiKey,
         customAIConfig: state.customAIConfig,
+        geminiModel: state.geminiModel,
         customPrompts: state.customPrompts,
         theme: state.theme,
         deviceId: state.deviceId,
