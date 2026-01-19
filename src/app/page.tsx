@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Download, Upload, Settings } from "lucide-react";
+import { Download, Upload, Mail, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useProjectStore } from "@/stores/useProjectStore";
@@ -11,6 +11,7 @@ import { TaskList } from "@/components/TaskList";
 import { CommandInput } from "@/components/CommandInput";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { ImportModal } from "@/components/ImportModal";
+import { EmailModal } from "@/components/EmailModal";
 import { UndoToast } from "@/components/UndoToast";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
@@ -27,6 +28,7 @@ export default function HomePage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
 
   // Undo 功能
   const { recordAction, undoAction, pendingAction, clearPending, isUndoing } = useUndo();
@@ -162,6 +164,12 @@ export default function HomePage() {
             导出
           </Button>
 
+          {/* Email Button */}
+          <Button variant="outline" size="sm" onClick={() => setEmailModalOpen(true)}>
+            <Mail className="mr-1 h-4 w-4" />
+            发送
+          </Button>
+
           {/* Import Button */}
           <Button variant="outline" size="sm" onClick={() => setImportModalOpen(true)}>
             <Upload className="mr-1 h-4 w-4" />
@@ -201,6 +209,14 @@ export default function HomePage() {
 
       {/* Import Modal */}
       <ImportModal open={importModalOpen} onOpenChange={setImportModalOpen} />
+
+      {/* Email Modal */}
+      <EmailModal
+        open={emailModalOpen}
+        onOpenChange={setEmailModalOpen}
+        tasks={tasks}
+        projectName={currentProjectName}
+      />
 
       {/* Undo Toast */}
       <UndoToast
