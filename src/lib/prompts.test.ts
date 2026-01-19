@@ -160,7 +160,7 @@ describe("PROMPT_PRESETS", () => {
   });
 
   it("should have required properties for each preset", () => {
-    for (const [_key, preset] of Object.entries(PROMPT_PRESETS)) {
+    for (const preset of Object.values(PROMPT_PRESETS)) {
       expect(preset).toHaveProperty("name");
       expect(preset).toHaveProperty("description");
       expect(preset).toHaveProperty("systemPrompt");

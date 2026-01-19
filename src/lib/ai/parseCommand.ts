@@ -105,7 +105,7 @@ function tryQuickMatch(input: string): ParsedCommand | null {
     return {
       action: "DELETE",
       confidence: 0.9,
-      targetId: undefined,
+      targetId: deleteMatch[2]?.trim() || undefined,
       rawInput: input,
     };
   }
@@ -252,4 +252,103 @@ export function findMatchingTask(description: string, tasks: SyntropyTask[]): Sy
   }
 
   return null;
+}
+
+export type TaskMatchReason = "id" | "exact" | "contains" | "ordinal";
+
+export interface TaskMatchCandidate {
+  task: SyntropyTask;
+  score: number;
+  reason: TaskMatchReason;
+}
+
+export interface TaskMatchResult {
+  candidates: TaskMatchCandidate[];
+  best?: TaskMatchCandidate;
+  isAmbiguous: boolean;
+}
+
+const MATCH_SCORE_THRESHOLD = 0.95; // 只有精确ID匹配才跳过弹窗
+const MATCH_SCORE_DELTA = 0.08;
+const MIN_CONTENT_QUERY_LENGTH = 2;
+
+export function findTaskCandidates(description: string, tasks: SyntropyTask[]): TaskMatchResult {
+  // 先过滤掉已删除的任务（双重保险）
+  const activeTasks = tasks.filter((t) => !t.deletedAt);
+
+  if (!description || activeTasks.length === 0) {
+    return { candidates: [], isAmbiguous: true };
+  }
+
+  const lowerDesc = description.trim().toLowerCase();
+  if (!lowerDesc) {
+    return { candidates: [], isAmbiguous: true };
+  }
+
+  const candidates: TaskMatchCandidate[] = [];
+
+  const addCandidate = (task: SyntropyTask, score: number, reason: TaskMatchReason) => {
+    const existing = candidates.find((c) => c.task.id === task.id);
+    if (existing) {
+      existing.score = Math.max(existing.score, score);
+      return;
+    }
+    candidates.push({ task, score, reason });
+  };
+
+  // 精确 ID 匹配
+  for (const task of activeTasks) {
+    const id = task.id.toLowerCase();
+    if (lowerDesc === id || lowerDesc.includes(id)) {
+      addCandidate(task, 1, "id");
+    }
+  }
+
+  // 内容匹配（避免过短关键词误匹配）
+  if (lowerDesc.length >= MIN_CONTENT_QUERY_LENGTH) {
+    for (const task of activeTasks) {
+      const content = task.content.toLowerCase();
+
+      if (content === lowerDesc) {
+        addCandidate(task, 0.92, "exact");
+        continue;
+      }
+
+      if (content.includes(lowerDesc) || lowerDesc.includes(content)) {
+        const ratio = Math.min(1, lowerDesc.length / Math.max(1, content.length));
+        addCandidate(task, 0.7 + ratio * 0.2, "contains");
+      }
+    }
+  }
+
+  // 序号匹配（"第一个"、"第1个"）
+  const orderMatch = description.match(/第?(\d+|一|二|三|四|五)/);
+  if (orderMatch) {
+    const numMap: Record<string, number> = {
+      一: 1,
+      二: 2,
+      三: 3,
+      四: 4,
+      五: 5,
+    };
+    const index = numMap[orderMatch[1]] || parseInt(orderMatch[1]) || 0;
+    if (index > 0 && index <= activeTasks.length) {
+      addCandidate(activeTasks[index - 1], 0.85, "ordinal");
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  const best = candidates[0];
+  const second = candidates[1];
+
+  // 只有精确ID匹配（score=1）且无其他候选时才跳过弹窗
+  const hasExactMatch = !!best && best.score >= MATCH_SCORE_THRESHOLD;
+  const hasMultipleCandidates = candidates.length > 1;
+  const scoresAreTooClose = !!second && best.score - second.score < MATCH_SCORE_DELTA;
+
+  // 更宽松的判断：多个候选 或 非精确匹配 都显示弹窗
+  const isAmbiguous = !best || !hasExactMatch || hasMultipleCandidates || scoresAreTooClose;
+
+  return { candidates, best, isAmbiguous };
 }

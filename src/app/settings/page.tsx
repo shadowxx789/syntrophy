@@ -443,41 +443,53 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold">AI 提示词配置</h2>
             <div className="flex items-center gap-2">
               <Switch checked={promptsEnabled} onCheckedChange={handleTogglePrompts} />
-              <span className="text-sm text-muted-foreground">自定义</span>
+              <span className="text-sm text-muted-foreground">启用预设/自定义</span>
             </div>
+          </div>
+
+          {/* 预设选择 - 始终显示 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">提示词模式</label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(PROMPT_PRESETS) as Exclude<PromptPreset, "custom">[]).map((key) => (
+                <Button
+                  key={key}
+                  variant={promptsEnabled && currentPreset === key ? "default" : "outline"}
+                  onClick={() => {
+                    if (!promptsEnabled) {
+                      handleTogglePrompts(true);
+                    }
+                    handleSelectPromptPreset(key);
+                  }}
+                  size="sm"
+                >
+                  {PROMPT_PRESETS[key].name}
+                </Button>
+              ))}
+              <Button
+                variant={promptsEnabled && currentPreset === "custom" ? "default" : "outline"}
+                onClick={() => {
+                  if (!promptsEnabled) {
+                    handleTogglePrompts(true);
+                  }
+                  handleSelectPromptPreset("custom");
+                }}
+                size="sm"
+              >
+                自定义
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {!promptsEnabled
+                ? "点击预设按钮启用并选择提示词模式"
+                : currentPreset === "custom"
+                  ? "完全自定义提示词内容"
+                  : PROMPT_PRESETS[currentPreset as Exclude<PromptPreset, "custom">]?.description}
+            </p>
           </div>
 
           {promptsEnabled && (
             <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
-              {/* 预设选择 */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">提示词模式</label>
-                <div className="flex flex-wrap gap-2">
-                  {(Object.keys(PROMPT_PRESETS) as Exclude<PromptPreset, "custom">[]).map((key) => (
-                    <Button
-                      key={key}
-                      variant={currentPreset === key ? "default" : "outline"}
-                      onClick={() => handleSelectPromptPreset(key)}
-                      size="sm"
-                    >
-                      {PROMPT_PRESETS[key].name}
-                    </Button>
-                  ))}
-                  <Button
-                    variant={currentPreset === "custom" ? "default" : "outline"}
-                    onClick={() => handleSelectPromptPreset("custom")}
-                    size="sm"
-                  >
-                    自定义
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {currentPreset === "custom"
-                    ? "完全自定义提示词内容"
-                    : PROMPT_PRESETS[currentPreset as Exclude<PromptPreset, "custom">]?.description}
-                </p>
-              </div>
-
               {/* 自定义编辑区 */}
               {currentPreset === "custom" && (
                 <div className="space-y-4 border-t pt-4">

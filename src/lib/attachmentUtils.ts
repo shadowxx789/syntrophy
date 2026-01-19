@@ -22,13 +22,13 @@ export async function createExcelAttachment(
   tasks: SyntropyTask[],
   projectName: string
 ): Promise<EmailAttachment> {
-  const base64Content = await generateExcelBase64(tasks, projectName);
+  const activeTasks = tasks.filter((task) => !task.deletedAt);
+  const base64Content = await generateExcelBase64(activeTasks, projectName);
 
   return {
     filename: getExcelFilename(projectName),
     content: base64Content,
-    contentType:
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   };
 }
 
@@ -55,10 +55,7 @@ export function generateEmailSubject(projectName: string): string {
 /**
  * Generate default email body
  */
-export function generateEmailBody(
-  projectName: string,
-  taskCount: number
-): string {
+export function generateEmailBody(projectName: string, taskCount: number): string {
   const today = new Date().toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "long",

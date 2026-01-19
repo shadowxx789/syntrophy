@@ -30,30 +30,27 @@ interface EmailModalProps {
 
 type SendState = "idle" | "sending" | "success" | "error";
 
-export function EmailModal({
-  open,
-  onOpenChange,
-  tasks,
-  projectName,
-}: EmailModalProps) {
+export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModalProps) {
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sendState, setSendState] = useState<SendState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const activeTasks = tasks.filter((task) => !task.deletedAt);
+
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
       setSubject(generateEmailSubject(projectName));
-      setBody(generateEmailBody(projectName, tasks.length));
+      setBody(generateEmailBody(projectName, activeTasks.length));
       setSendState("idle");
       setErrorMessage("");
     }
-  }, [open, projectName, tasks.length]);
+  }, [open, projectName, activeTasks.length]);
 
   const emailValid = isValidEmail(email);
-  const canSend = emailValid && subject.trim() && tasks.length > 0;
+  const canSend = emailValid && subject.trim() && activeTasks.length > 0;
 
   const handleSend = async () => {
     if (!canSend) return;
@@ -63,7 +60,7 @@ export function EmailModal({
 
     try {
       // Create Excel attachment
-      const attachment = await createExcelAttachment(tasks, projectName);
+      const attachment = await createExcelAttachment(activeTasks, projectName);
 
       // Send email
       const result = await sendEmail({
@@ -85,9 +82,7 @@ export function EmailModal({
       }
     } catch (error) {
       setSendState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Unexpected error"
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     }
   };
 
@@ -112,7 +107,7 @@ export function EmailModal({
             Send via Email
           </DialogTitle>
           <DialogDescription>
-            Send {tasks.length} tasks from {projectName} as Excel attachment
+            Send {activeTasks.length} tasks from {projectName} as Excel attachment
           </DialogDescription>
         </DialogHeader>
 
@@ -133,9 +128,7 @@ export function EmailModal({
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-green-600 dark:text-green-400">
-              Email Sent!
-            </h3>
+            <h3 className="text-lg font-medium text-green-600 dark:text-green-400">Email Sent!</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               The task list has been sent to {email}
             </p>
@@ -190,9 +183,7 @@ export function EmailModal({
                   </span>
                 )}
               </div>
-              {email && !emailValid && (
-                <p className="text-xs text-red-500">Invalid email format</p>
-              )}
+              {email && !emailValid && <p className="text-xs text-red-500">Invalid email format</p>}
             </div>
 
             {/* Subject Input */}
@@ -239,7 +230,7 @@ export function EmailModal({
 
             {/* Error Message */}
             {sendState === "error" && errorMessage && (
-              <div className="rounded-md bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+              <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
                 {errorMessage}
               </div>
             )}
@@ -262,11 +253,7 @@ export function EmailModal({
             >
               {sendState === "sending" ? (
                 <span className="flex items-center gap-2">
-                  <svg
-                    className="h-4 w-4 animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle
                       className="opacity-25"
                       cx="12"

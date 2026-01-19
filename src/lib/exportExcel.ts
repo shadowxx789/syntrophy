@@ -8,14 +8,15 @@ import type { SyntropyTask } from "@/types";
  * @param projectName 项目名称 (用于文件名和 Sheet 名)
  */
 export function exportToExcel(tasks: SyntropyTask[], projectName: string): void {
+  // 过滤掉已删除的任务
+  const activeTasks = tasks.filter((t) => !t.deletedAt);
+
   // 转换为 Excel 行数据
-  const rows = tasks.map((task) => ({
+  const rows = activeTasks.map((task) => ({
     ID: task.id,
     状态: task.status === "done" ? "✓ 已完成" : "○ 待办",
     内容: task.content,
-    优先级: task.priority
-      ? { high: "高", medium: "中", low: "低" }[task.priority]
-      : "",
+    优先级: task.priority ? { high: "高", medium: "中", low: "低" }[task.priority] : "",
     开始日期: task.startDate || "",
     截止日期: task.endDate || "",
     创建时间: formatDateTime(task.createdAt),
@@ -43,8 +44,11 @@ export function exportToExcel(tasks: SyntropyTask[], projectName: string): void 
   // 添加工作表到工作簿
   XLSX.utils.book_append_sheet(workbook, worksheet, projectName);
 
-  // 生成文件名
-  const timestamp = new Date().toISOString().slice(0, 10);
+  // 生成文件名（包含日期和时间）
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  const timestamp = `${date}_${time}`;
   const fileName = `${projectName}_${timestamp}.xlsx`;
 
   // 触发下载
@@ -71,9 +75,7 @@ function formatDateTime(isoString: string): string {
  * @param file Excel 文件
  * @returns 解析后的任务列表
  */
-export async function parseExcelFile(
-  file: File
-): Promise<Partial<SyntropyTask>[]> {
+export async function parseExcelFile(file: File): Promise<Partial<SyntropyTask>[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -96,8 +98,7 @@ export async function parseExcelFile(
         const tasks: Partial<SyntropyTask>[] = jsonData.map((row) => ({
           id: String(row["ID"] || ""),
           content: String(row["内容"] || ""),
-          status:
-            String(row["状态"]).includes("完成") ? "done" : "todo",
+          status: String(row["状态"]).includes("完成") ? "done" : "todo",
           priority: mapPriority(String(row["优先级"] || "")),
           startDate: parseDate(row["开始日期"]),
           endDate: parseDate(row["截止日期"]),

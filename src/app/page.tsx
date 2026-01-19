@@ -67,11 +67,12 @@ export default function HomePage() {
 
   // 导出 Excel
   const handleExport = () => {
-    if (tasks.length === 0) {
+    const activeTasks = tasks.filter((task) => !task.deletedAt);
+    if (activeTasks.length === 0) {
       alert("当前项目没有任务可导出");
       return;
     }
-    exportToExcel(tasks, currentProjectName);
+    exportToExcel(activeTasks, currentProjectName);
   };
 
   // 编辑任务

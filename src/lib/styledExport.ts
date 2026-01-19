@@ -69,10 +69,8 @@ function formatDateTime(isoString: string): string {
  * @param projectName Project name for sheet name and filename
  * @returns ExcelJS Workbook
  */
-export function createStyledWorkbook(
-  tasks: SyntropyTask[],
-  projectName: string
-): ExcelJS.Workbook {
+export function createStyledWorkbook(tasks: SyntropyTask[], projectName: string): ExcelJS.Workbook {
+  const activeTasks = tasks.filter((task) => !task.deletedAt);
   const workbook = new ExcelJS.Workbook();
 
   // Set workbook properties
@@ -110,7 +108,7 @@ export function createStyledWorkbook(
   headerRow.height = 24;
 
   // Add data rows
-  tasks.forEach((task) => {
+  activeTasks.forEach((task) => {
     const row = worksheet.addRow({
       id: task.id,
       status: STATUS_DISPLAY[task.status] || task.status,
@@ -180,10 +178,7 @@ export function createStyledWorkbook(
  * @param tasks Task list to export
  * @param projectName Project name for filename
  */
-export async function exportStyledExcel(
-  tasks: SyntropyTask[],
-  projectName: string
-): Promise<void> {
+export async function exportStyledExcel(tasks: SyntropyTask[], projectName: string): Promise<void> {
   const workbook = createStyledWorkbook(tasks, projectName);
 
   // Generate buffer
@@ -194,7 +189,10 @@ export async function exportStyledExcel(
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  const timestamp = `${date}_${time}`;
   const fileName = `${projectName}_${timestamp}.xlsx`;
 
   const url = URL.createObjectURL(blob);
@@ -233,6 +231,9 @@ export async function generateExcelBase64(
  * Get Excel filename with timestamp
  */
 export function getExcelFilename(projectName: string): string {
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  const timestamp = `${date}_${time}`;
   return `${projectName}_${timestamp}.xlsx`;
 }

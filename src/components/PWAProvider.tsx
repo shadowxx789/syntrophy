@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { registerSW, isPWAInstalled, isOnline } from "@/lib/registerSW";
+import { registerSW, isPWAInstalled, isOnline, clearSWCache, skipWaiting } from "@/lib/registerSW";
 import { setupOfflineSync } from "@/lib/offlineQueue";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { InstallPrompt } from "./InstallPrompt";
@@ -28,6 +28,8 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
       onUpdate: () => {
         console.log("[PWAProvider] Update available");
         setUpdateAvailable(true);
+        void clearSWCache();
+        skipWaiting();
       },
       onSuccess: () => {
         console.log("[PWAProvider] SW registered successfully");
@@ -59,11 +61,7 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
 
   // Expose context values via data attributes for components that need them
   return (
-    <div
-      data-offline={isOffline}
-      data-update-available={updateAvailable}
-      className="contents"
-    >
+    <div data-offline={isOffline} data-update-available={updateAvailable} className="contents">
       {children}
       <OfflineIndicator />
       <InstallPrompt />

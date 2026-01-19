@@ -49,11 +49,10 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      await db.reconcileDeletedTasks();
       const tasks = await db.getActiveTasks(projectId);
       // 按创建时间倒序排列
-      tasks.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      tasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       set({ tasks, isLoading: false });
     } catch (error) {
       set({

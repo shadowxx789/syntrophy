@@ -7,14 +7,23 @@ import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { parseCommand, findMatchingTask, getProviderDisplayName } from "@/lib/ai";
+import { parseCommand, findTaskCandidates, getProviderDisplayName } from "@/lib/ai";
+import type { TaskMatchCandidate } from "@/lib/ai/parseCommand";
 import { decryptApiKey } from "@/lib/crypto";
-import type { ParsedCommand, SyntropyTask } from "@/types";
+import type { ParsedCommand, SyntropyTask, UpdateTaskInput } from "@/types";
+import { TaskSelectionDialog } from "./TaskSelectionDialog";
 
 interface CommandInputProps {
   onTaskCreated?: (task: SyntropyTask, beforeSnapshot?: SyntropyTask) => void;
   onTaskUpdated?: (task: SyntropyTask, beforeSnapshot: SyntropyTask) => void;
   onTaskDeleted?: (task: SyntropyTask) => void;
+}
+
+interface SelectionDialogState {
+  open: boolean;
+  candidates: TaskMatchCandidate[];
+  action: "UPDATE" | "DELETE";
+  pendingCommand: ParsedCommand;
 }
 
 export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: CommandInputProps) {
@@ -23,11 +32,31 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
   const [aiEnabled, setAiEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastParsed, setLastParsed] = useState<ParsedCommand | null>(null);
+  const [selectionDialog, setSelectionDialog] = useState<SelectionDialogState | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { tasks, createTask, updateTask, deleteTask } = useTaskStore();
   const { currentProjectId } = useProjectStore();
   const { aiProvider, encryptedApiKey, customAIConfig, customPrompts } = useSettingsStore();
+
+  const UPDATE_KEYWORD_REGEX = /(修改|更新|改成|调整)/;
+  const UPDATE_PREFIX_REGEX = /^(完成|做完了?|标记完成|修改|更新|改成|调整)\s*/;
+  const DELETE_PREFIX_REGEX = /^(删除|移除|去掉)\s*/;
+
+  const extractTargetQuery = (action: ParsedCommand["action"], rawInput?: string) => {
+    const trimmed = rawInput?.trim();
+    if (!trimmed) return undefined;
+
+    if (action === "DELETE") {
+      return trimmed.replace(DELETE_PREFIX_REGEX, "").trim() || undefined;
+    }
+
+    if (action === "UPDATE") {
+      return trimmed.replace(UPDATE_PREFIX_REGEX, "").trim() || undefined;
+    }
+
+    return undefined;
+  };
 
   const handleSubmit = async () => {
     const trimmedInput = input.trim();
@@ -51,7 +80,8 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
               apiKey,
               customConfig: aiProvider === "custom" ? customAIConfig : undefined,
             },
-            tasks.map((t) => ({ id: t.id, content: t.content })),
+            // 只传递未删除的任务给 AI
+            tasks.filter((t) => !t.deletedAt).map((t) => ({ id: t.id, content: t.content })),
             customPrompts
           );
           setLastParsed(parsedCommand);
@@ -109,22 +139,46 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
       }
 
       case "UPDATE": {
-        // 查找目标任务
-        const targetTask = command.targetId ? findMatchingTask(command.targetId, tasks) : tasks[0]; // 默认最新的任务
+        const rawInput = command.rawInput || "";
+        const targetQuery = command.targetId?.trim() || extractTargetQuery("UPDATE", rawInput);
 
-        if (!targetTask) {
-          throw new Error("找不到要修改的任务");
+        if (!targetQuery) {
+          throw new Error("请指定要修改的任务（ID/序号/关键内容）");
         }
 
+        // 过滤已删除的任务（双重保险）
+        const activeTasks = tasks.filter((t) => !t.deletedAt);
+        const match = findTaskCandidates(targetQuery, activeTasks);
+
+        if (!match.best) {
+          throw new Error("未找到匹配的任务");
+        }
+        if (match.isAmbiguous) {
+          setSelectionDialog({
+            open: true,
+            candidates: match.candidates.slice(0, 3),
+            action: "UPDATE",
+            pendingCommand: command,
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        const updates: UpdateTaskInput = {};
+        if (command.task?.content) updates.content = command.task.content;
+        if (command.task?.status) updates.status = command.task.status;
+        if (command.task?.priority) updates.priority = command.task.priority;
+        if (command.task?.startDate) updates.startDate = command.task.startDate;
+        if (command.task?.endDate) updates.endDate = command.task.endDate;
+
+        if (Object.keys(updates).length === 0) {
+          throw new Error("请说明要修改的内容");
+        }
+
+        const targetTask = match.best.task;
         const beforeSnapshot = { ...targetTask };
 
-        await updateTask(targetTask.id, {
-          content: command.task?.content,
-          status: command.task?.status,
-          priority: command.task?.priority,
-          startDate: command.task?.startDate,
-          endDate: command.task?.endDate,
-        });
+        await updateTask(targetTask.id, updates);
 
         const updatedTask = tasks.find((t) => t.id === targetTask.id);
         if (updatedTask) {
@@ -134,13 +188,35 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
       }
 
       case "DELETE": {
-        // 查找目标任务
-        const targetTask = command.targetId ? findMatchingTask(command.targetId, tasks) : null;
-
-        if (!targetTask) {
-          throw new Error("找不到要删除的任务");
+        const rawInput = command.rawInput || "";
+        if (UPDATE_KEYWORD_REGEX.test(rawInput)) {
+          throw new Error("检测到修改意图，请使用修改指令或补充要修改的内容");
         }
 
+        const targetQuery = command.targetId?.trim() || extractTargetQuery("DELETE", rawInput);
+        if (!targetQuery) {
+          throw new Error("请指定要删除的任务（ID/序号/关键内容）");
+        }
+
+        // 过滤已删除的任务（双重保险）
+        const activeTasksForDelete = tasks.filter((t) => !t.deletedAt);
+        const match = findTaskCandidates(targetQuery, activeTasksForDelete);
+
+        if (!match.best) {
+          throw new Error("未找到匹配的任务");
+        }
+        if (match.isAmbiguous) {
+          setSelectionDialog({
+            open: true,
+            candidates: match.candidates.slice(0, 3),
+            action: "DELETE",
+            pendingCommand: command,
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        const targetTask = match.best.task;
         await deleteTask(targetTask.id);
         onTaskDeleted?.(targetTask);
         break;
@@ -159,6 +235,55 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
         }
         break;
     }
+  };
+
+  // Handle task selection from dialog
+  const handleTaskSelected = async (task: SyntropyTask) => {
+    if (!selectionDialog) return;
+
+    const { action, pendingCommand } = selectionDialog;
+    setSelectionDialog(null);
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      if (action === "UPDATE") {
+        const updates: UpdateTaskInput = {};
+        if (pendingCommand.task?.content) updates.content = pendingCommand.task.content;
+        if (pendingCommand.task?.status) updates.status = pendingCommand.task.status;
+        if (pendingCommand.task?.priority) updates.priority = pendingCommand.task.priority;
+        if (pendingCommand.task?.startDate) updates.startDate = pendingCommand.task.startDate;
+        if (pendingCommand.task?.endDate) updates.endDate = pendingCommand.task.endDate;
+
+        if (Object.keys(updates).length === 0) {
+          throw new Error("请说明要修改的内容");
+        }
+
+        const beforeSnapshot = { ...task };
+        await updateTask(task.id, updates);
+
+        const updatedTask = tasks.find((t) => t.id === task.id);
+        if (updatedTask) {
+          onTaskUpdated?.(updatedTask, beforeSnapshot);
+        }
+      } else if (action === "DELETE") {
+        await deleteTask(task.id);
+        onTaskDeleted?.(task);
+      }
+
+      setInput("");
+      inputRef.current?.focus();
+    } catch (err) {
+      console.error("操作失败:", err);
+      setError(err instanceof Error ? err.message : "操作失败");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSelectionCancel = () => {
+    setSelectionDialog(null);
+    inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -252,6 +377,18 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
           </span>
         )}
       </div>
+
+      {/* Task Selection Dialog */}
+      {selectionDialog && (
+        <TaskSelectionDialog
+          open={selectionDialog.open}
+          onOpenChange={(open) => !open && handleSelectionCancel()}
+          candidates={selectionDialog.candidates}
+          action={selectionDialog.action}
+          onSelect={handleTaskSelected}
+          onCancel={handleSelectionCancel}
+        />
+      )}
     </div>
   );
 }

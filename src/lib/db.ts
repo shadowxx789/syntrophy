@@ -1,11 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type {
-  SyntropyTask,
-  SyntropyProject,
-  Operation,
-  Counter,
-  SyncMetadata,
-} from "@/types";
+import type { SyntropyTask, SyntropyProject, Operation, Counter, SyncMetadata } from "@/types";
 import type { OfflineOperation } from "./offlineQueue";
 
 /**
@@ -84,12 +78,39 @@ class SyntropyDatabase extends Dexie {
     let query = this.tasks.filter((task) => !task.deletedAt);
 
     if (projectId) {
-      query = this.tasks.filter(
-        (task) => task.projectId === projectId && !task.deletedAt
-      );
+      query = this.tasks.filter((task) => task.projectId === projectId && !task.deletedAt);
     }
 
     return await query.toArray();
+  }
+
+  /**
+   * 修复历史删除记录：为缺失 deletedAt 的任务补全删除标记
+   */
+  async reconcileDeletedTasks(): Promise<number> {
+    const deleteOps = await this.operations
+      .filter((op) => op.entityType === "task" && op.type === "DELETE")
+      .toArray();
+
+    if (deleteOps.length === 0) {
+      return 0;
+    }
+
+    let updatedCount = 0;
+    for (const op of deleteOps) {
+      const task = await this.tasks.get(op.entityId);
+      if (task && !task.deletedAt) {
+        await this.tasks.put({
+          ...task,
+          deletedAt: op.timestamp,
+          updatedAt: op.timestamp,
+          version: task.version + 1,
+        });
+        updatedCount++;
+      }
+    }
+
+    return updatedCount;
   }
 
   /**
@@ -105,19 +126,14 @@ class SyntropyDatabase extends Dexie {
    * 获取未同步的操作日志
    */
   async getPendingOperations(): Promise<Operation[]> {
-    return await this.operations
-      .filter((op) => !op.synced)
-      .sortBy("lamportClock");
+    return await this.operations.filter((op) => !op.synced).sortBy("lamportClock");
   }
 
   /**
    * 标记操作为已同步
    */
   async markOperationsSynced(operationIds: string[]): Promise<void> {
-    await this.operations
-      .where("id")
-      .anyOf(operationIds)
-      .modify({ synced: true });
+    await this.operations.where("id").anyOf(operationIds).modify({ synced: true });
   }
 
   /**
