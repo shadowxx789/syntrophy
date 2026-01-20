@@ -27,6 +27,7 @@ Object.defineProperty(global, "localStorage", {
 vi.mock("@/lib/generateId", () => ({
   getOrCreateDeviceId: vi.fn(() => "DEV-test1234"),
   generateCustomProviderId: vi.fn(() => `CUSTOM-${Math.random().toString(36).slice(2, 10)}`),
+  generateUUID: vi.fn(() => `UUID-${Math.random().toString(36).slice(2, 10)}`),
 }));
 
 describe("useSettingsStore - Custom Provider Management", () => {
@@ -40,6 +41,7 @@ describe("useSettingsStore - Custom Provider Management", () => {
       geminiModel: undefined,
       savedCustomProviders: [],
       selectedCustomProviderId: undefined,
+      savedRecipients: [],
       customPrompts: undefined,
       theme: "system",
       deviceId: "",
@@ -429,6 +431,92 @@ describe("useSettingsStore - Custom Provider Management", () => {
       expect(result.added).toBe(1); // Only 1 fits (9 + 1 = 10)
       expect(result.skipped).toBe(2);
       expect(useSettingsStore.getState().savedCustomProviders).toHaveLength(10);
+    });
+  });
+
+  describe("savedRecipients", () => {
+    it("should add a new saved recipient", () => {
+      const store = useSettingsStore.getState();
+
+      const result = store.addSavedRecipient({
+        email: "user@example.com",
+        label: "测试收件人",
+      });
+
+      expect(result).not.toBeNull();
+      expect(result?.email).toBe("user@example.com");
+      expect(result?.label).toBe("测试收件人");
+      expect(result?.id).toMatch(/^UUID-/);
+      expect(result?.createdAt).toBeDefined();
+
+      const state = useSettingsStore.getState();
+      expect(state.savedRecipients).toHaveLength(1);
+    });
+
+    it("should update label for existing email", () => {
+      const store = useSettingsStore.getState();
+      const first = store.addSavedRecipient({
+        email: "user@example.com",
+        label: "Old",
+      });
+
+      const result = store.addSavedRecipient({
+        email: "user@example.com",
+        label: "New",
+      });
+
+      expect(result?.id).toBe(first?.id);
+      expect(result?.label).toBe("New");
+      expect(useSettingsStore.getState().savedRecipients).toHaveLength(1);
+    });
+
+    it("should return null when max recipients reached", () => {
+      const store = useSettingsStore.getState();
+
+      for (let i = 0; i < 10; i++) {
+        store.addSavedRecipient({
+          email: `user${i}@example.com`,
+          label: `User ${i}`,
+        });
+      }
+
+      const result = store.addSavedRecipient({
+        email: "user10@example.com",
+        label: "User 10",
+      });
+
+      expect(result).toBeNull();
+      expect(useSettingsStore.getState().savedRecipients).toHaveLength(10);
+    });
+
+    it("should update saved recipient", () => {
+      const store = useSettingsStore.getState();
+      const recipient = store.addSavedRecipient({
+        email: "user@example.com",
+        label: "Old",
+      });
+
+      const success = store.updateSavedRecipient(recipient!.id, {
+        label: "Updated",
+      });
+
+      expect(success).toBe(true);
+      const updated = useSettingsStore
+        .getState()
+        .savedRecipients?.find((item) => item.id === recipient!.id);
+      expect(updated?.label).toBe("Updated");
+    });
+
+    it("should delete saved recipient", () => {
+      const store = useSettingsStore.getState();
+      const recipient = store.addSavedRecipient({
+        email: "user@example.com",
+      });
+
+      const success = store.deleteSavedRecipient(recipient!.id);
+
+      expect(success).toBe(true);
+      expect(useSettingsStore.getState().savedRecipients).toHaveLength(0);
     });
   });
 });

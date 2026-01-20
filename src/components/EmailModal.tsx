@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { SyntropyTask } from "@/types";
+import type { SyntropyTask, SyntropyProject } from "@/types";
+import { MAX_SAVED_RECIPIENTS } from "@/types";
 import {
   Dialog,
   DialogContent,
@@ -12,45 +13,146 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
-  createExcelAttachment,
+  createExcelAttachmentForProjects,
   isValidEmail,
-  generateEmailSubject,
-  generateEmailBody,
+  generateEmailSubjectForProjects,
+  generateEmailBodyForProjects,
 } from "@/lib/attachmentUtils";
 import { sendEmail } from "@/app/actions/sendEmail";
+import { useSettingsStore } from "@/stores/useSettingsStore";
+import { db } from "@/lib/db";
 
 interface EmailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tasks: SyntropyTask[];
   projectName: string;
+  projects: SyntropyProject[];
+  currentProjectId: string;
 }
 
 type SendState = "idle" | "sending" | "success" | "error";
 
-export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModalProps) {
+export function EmailModal({
+  open,
+  onOpenChange,
+  tasks,
+  projectName,
+  projects,
+  currentProjectId,
+}: EmailModalProps) {
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [defaultSubject, setDefaultSubject] = useState("");
+  const [defaultBody, setDefaultBody] = useState("");
   const [sendState, setSendState] = useState<SendState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [recipientLabel, setRecipientLabel] = useState("");
+  const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([currentProjectId]);
+  const [selectedTaskCount, setSelectedTaskCount] = useState(0);
+  const [projectTasks, setProjectTasks] = useState<
+    { projectId: string; projectName: string; tasks: SyntropyTask[] }[]
+  >([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
 
   const activeTasks = tasks.filter((task) => !task.deletedAt);
+
+  const { addSavedRecipient, deleteSavedRecipient, markRecipientUsed, getSavedRecipients } =
+    useSettingsStore();
+  const savedRecipients = getSavedRecipients();
+
+  const selectedProjects = projects.filter((project) => selectedProjectIds.includes(project.id));
+  const selectedProjectNames = selectedProjects.map((project) => project.name);
 
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
-      setSubject(generateEmailSubject(projectName));
-      setBody(generateEmailBody(projectName, activeTasks.length));
+      setSelectedProjectIds([currentProjectId]);
+      setRecipientLabel("");
+      const initialSubject = generateEmailSubjectForProjects([projectName]);
+      const initialBody = generateEmailBodyForProjects([projectName], activeTasks.length);
+      setDefaultSubject(initialSubject);
+      setDefaultBody(initialBody);
+      setSubject(initialSubject);
+      setBody(initialBody);
       setSendState("idle");
       setErrorMessage("");
+      setRecipientError(null);
     }
-  }, [open, projectName, activeTasks.length]);
+  }, [open, currentProjectId, projectName, activeTasks.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    async function loadProjectTasks() {
+      if (selectedProjectIds.length === 0) {
+        setProjectTasks([]);
+        setSelectedTaskCount(0);
+        return;
+      }
+
+      setIsLoadingProjects(true);
+      try {
+        const results = await Promise.all(
+          selectedProjectIds.map(async (projectId) => {
+            const project = projects.find((item) => item.id === projectId);
+            const tasksForProject = await db.getActiveTasks(projectId);
+            return {
+              projectId,
+              projectName: project?.name || "项目",
+              tasks: tasksForProject,
+            };
+          })
+        );
+
+        if (!cancelled) {
+          setProjectTasks(results);
+          setSelectedTaskCount(results.reduce((sum, item) => sum + item.tasks.length, 0));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("加载项目任务失败:", error);
+          setProjectTasks([]);
+          setSelectedTaskCount(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingProjects(false);
+        }
+      }
+    }
+
+    loadProjectTasks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, selectedProjectIds, projects]);
+
+  useEffect(() => {
+    if (!open) return;
+    const names = selectedProjectNames.length > 0 ? selectedProjectNames : [projectName];
+    const nextSubject = generateEmailSubjectForProjects(names);
+    const nextBody = generateEmailBodyForProjects(names, selectedTaskCount);
+    setDefaultSubject(nextSubject);
+    setDefaultBody(nextBody);
+    setSubject((prev) => (prev === defaultSubject ? nextSubject : prev));
+    setBody((prev) => (prev === defaultBody ? nextBody : prev));
+  }, [open, selectedProjectNames, selectedTaskCount, projectName, defaultSubject, defaultBody]);
 
   const emailValid = isValidEmail(email);
-  const canSend = emailValid && subject.trim() && activeTasks.length > 0;
+  const canSend =
+    emailValid &&
+    subject.trim() &&
+    selectedTaskCount > 0 &&
+    selectedProjectIds.length > 0 &&
+    !isLoadingProjects;
 
   const handleSend = async () => {
     if (!canSend) return;
@@ -59,10 +161,23 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
     setErrorMessage("");
 
     try {
-      // Create Excel attachment
-      const attachment = await createExcelAttachment(activeTasks, projectName);
+      const attachmentProjects = projectTasks.length
+        ? projectTasks
+        : [
+            {
+              projectId: currentProjectId,
+              projectName,
+              tasks: activeTasks,
+            },
+          ];
 
-      // Send email
+      const attachment = await createExcelAttachmentForProjects(
+        attachmentProjects.map((item) => ({
+          projectName: item.projectName,
+          tasks: item.tasks,
+        }))
+      );
+
       const result = await sendEmail({
         to: email,
         subject,
@@ -71,8 +186,12 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
       });
 
       if (result.success) {
+        const matchedRecipient = savedRecipients.find((item) => item.email === email.trim());
+        if (matchedRecipient) {
+          markRecipientUsed(matchedRecipient.id);
+        }
+
         setSendState("success");
-        // Auto close after 2 seconds
         setTimeout(() => {
           onOpenChange(false);
         }, 2000);
@@ -84,6 +203,41 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
       setSendState("error");
       setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     }
+  };
+
+  const handleToggleProject = (projectId: string) => {
+    setSelectedProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId]
+    );
+  };
+
+  const handleSelectRecipient = (recipientId: string) => {
+    const recipient = savedRecipients.find((item) => item.id === recipientId);
+    if (!recipient) return;
+    setEmail(recipient.email);
+    setRecipientLabel(recipient.label || "");
+    setRecipientError(null);
+    markRecipientUsed(recipient.id);
+  };
+
+  const handleSaveRecipient = () => {
+    setRecipientError(null);
+    if (!emailValid) {
+      setRecipientError("请输入有效邮箱");
+      return;
+    }
+
+    const result = addSavedRecipient({
+      email: email.trim(),
+      label: recipientLabel.trim() || undefined,
+    });
+
+    if (!result) {
+      setRecipientError(`最多只能保存 ${MAX_SAVED_RECIPIENTS} 个常用收件人`);
+      return;
+    }
+
+    setRecipientLabel("");
   };
 
   return (
@@ -107,7 +261,11 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
             Send via Email
           </DialogTitle>
           <DialogDescription>
-            Send {activeTasks.length} tasks from {projectName} as Excel attachment
+            Send {selectedTaskCount} tasks from{" "}
+            {selectedProjectNames.length > 0
+              ? selectedProjectNames.join(", ")
+              : "selected projects"}{" "}
+            as Excel attachment
           </DialogDescription>
         </DialogHeader>
 
@@ -135,6 +293,36 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
           </div>
         ) : (
           <div className="space-y-4 py-4">
+            {/* Project Selection */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">选择项目</label>
+                <span className="text-xs text-muted-foreground">
+                  已选 {selectedProjectIds.length} 个项目
+                </span>
+              </div>
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                {projects.map((project) => (
+                  <label key={project.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={selectedProjectIds.includes(project.id)}
+                      onCheckedChange={() => handleToggleProject(project.id)}
+                    />
+                    <span className="flex-1 truncate">{project.name}</span>
+                    {project.id === currentProjectId && (
+                      <span className="text-xs text-muted-foreground">当前</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isLoadingProjects ? "正在加载任务..." : `共 ${selectedTaskCount} 条任务`}
+              </p>
+              {selectedProjectIds.length === 0 && (
+                <p className="text-xs text-destructive">请至少选择一个项目</p>
+              )}
+            </div>
+
             {/* Email Input */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Recipient Email</label>
@@ -142,7 +330,10 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
                 <Input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setRecipientError(null);
+                  }}
                   placeholder="email@example.com"
                   className={cn(
                     "pr-10",
@@ -186,6 +377,64 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
               {email && !emailValid && <p className="text-xs text-red-500">Invalid email format</p>}
             </div>
 
+            {/* Saved Recipients */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">常用收件人</label>
+                <span className="text-xs text-muted-foreground">
+                  {savedRecipients.length}/{MAX_SAVED_RECIPIENTS}
+                </span>
+              </div>
+              {savedRecipients.length === 0 ? (
+                <p className="text-xs text-muted-foreground">暂无常用收件人</p>
+              ) : (
+                <div className="space-y-2">
+                  {savedRecipients.map((recipient) => (
+                    <div key={recipient.id} className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 justify-start"
+                        onClick={() => handleSelectRecipient(recipient.id)}
+                      >
+                        {recipient.label
+                          ? `${recipient.label} (${recipient.email})`
+                          : recipient.email}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteSavedRecipient(recipient.id)}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Save Recipient */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">保存为常用收件人</label>
+              <div className="flex gap-2">
+                <Input
+                  value={recipientLabel}
+                  onChange={(e) => setRecipientLabel(e.target.value)}
+                  placeholder="标签（可选）"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSaveRecipient}
+                  disabled={!emailValid}
+                >
+                  保存
+                </Button>
+              </div>
+              {recipientError && <p className="text-xs text-destructive">{recipientError}</p>}
+            </div>
+
             {/* Subject Input */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Subject</label>
@@ -224,7 +473,10 @@ export function EmailModal({ open, onOpenChange, tasks, projectName }: EmailModa
                 />
               </svg>
               <span>
-                {projectName}_{new Date().toISOString().slice(0, 10)}.xlsx
+                {selectedProjectNames.length === 1
+                  ? selectedProjectNames[0]
+                  : `${selectedProjectNames[0] || "多项目"}等${selectedProjectNames.length}个项目`}
+                _{new Date().toISOString().slice(0, 10)}.xlsx
               </span>
             </div>
 

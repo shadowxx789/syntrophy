@@ -349,6 +349,27 @@ export interface CustomProviderExport {
 /** 最大自定义提供商数量 */
 export const MAX_CUSTOM_PROVIDERS = 10;
 
+/** 已保存的常用收件人 */
+export interface SavedRecipient {
+  /** 唯一标识 */
+  id: string;
+
+  /** 邮箱地址 */
+  email: string;
+
+  /** 可选标签 */
+  label?: string;
+
+  /** 创建时间 (ISO 8601) */
+  createdAt: string;
+
+  /** 最后使用时间 (ISO 8601) */
+  lastUsedAt?: string;
+}
+
+/** 最大常用收件人数 */
+export const MAX_SAVED_RECIPIENTS = 10;
+
 export interface Settings {
   /** AI 服务商 */
   aiProvider: AIProvider;
@@ -367,6 +388,9 @@ export interface Settings {
 
   /** 当前选中的自定义提供商 ID */
   selectedCustomProviderId?: string;
+
+  /** 常用收件人列表 */
+  savedRecipients?: SavedRecipient[];
 
   /** 自定义 AI 提示词配置 */
   customPrompts?: CustomPromptConfig;

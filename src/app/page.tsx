@@ -12,10 +12,12 @@ import { CommandInput } from "@/components/CommandInput";
 import { TaskEditModal } from "@/components/TaskEditModal";
 import { ImportModal } from "@/components/ImportModal";
 import { EmailModal } from "@/components/EmailModal";
+import { ExportModal } from "@/components/ExportModal";
 import { UndoToast } from "@/components/UndoToast";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
-import { exportToExcel } from "@/lib/exportExcel";
+import { exportStyledExcelForProjects } from "@/lib/styledExport";
+import { db } from "@/lib/db";
 import { useUndo } from "@/hooks/useUndo";
 import type { SyntropyTask } from "@/types";
 
@@ -29,6 +31,7 @@ export default function HomePage() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   // Undo 功能
   const { recordAction, undoAction, pendingAction, clearPending, isUndoing } = useUndo();
@@ -69,12 +72,25 @@ export default function HomePage() {
 
   // 导出 Excel
   const handleExport = () => {
-    const activeTasks = tasks.filter((task) => !task.deletedAt);
-    if (activeTasks.length === 0) {
-      alert("当前项目没有任务可导出");
+    setExportModalOpen(true);
+  };
+
+  const handleExportProjects = async (projectIds: string[]) => {
+    const selectedProjects = projects.filter((project) => projectIds.includes(project.id));
+    const projectTasks = await Promise.all(
+      selectedProjects.map(async (project) => ({
+        projectName: project.name,
+        tasks: await db.getActiveTasks(project.id),
+      }))
+    );
+
+    const hasTasks = projectTasks.some((project) => project.tasks.length > 0);
+    if (!hasTasks) {
+      alert("所选项目没有任务可导出");
       return;
     }
-    exportToExcel(activeTasks, currentProjectName);
+
+    await exportStyledExcelForProjects(projectTasks);
   };
 
   // 编辑任务
@@ -210,12 +226,23 @@ export default function HomePage() {
       {/* Import Modal */}
       <ImportModal open={importModalOpen} onOpenChange={setImportModalOpen} />
 
+      {/* Export Modal */}
+      <ExportModal
+        open={exportModalOpen}
+        onOpenChange={setExportModalOpen}
+        projects={projects}
+        currentProjectId={currentProjectId}
+        onExport={handleExportProjects}
+      />
+
       {/* Email Modal */}
       <EmailModal
         open={emailModalOpen}
         onOpenChange={setEmailModalOpen}
         tasks={tasks}
         projectName={currentProjectName}
+        projects={projects}
+        currentProjectId={currentProjectId}
       />
 
       {/* Undo Toast */}

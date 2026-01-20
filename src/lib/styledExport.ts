@@ -55,6 +55,132 @@ function formatDateTime(isoString: string): string {
   });
 }
 
+const MAX_SHEET_NAME_LENGTH = 31;
+const INVALID_SHEET_NAME_REGEX = /[\\/?*:[\]]/g;
+
+function normalizeSheetName(name: string): string {
+  const cleaned = name.replace(INVALID_SHEET_NAME_REGEX, "").trim();
+  return cleaned || "Sheet";
+}
+
+function getUniqueSheetName(name: string, usedNames: Set<string>): string {
+  const baseName = normalizeSheetName(name).slice(0, MAX_SHEET_NAME_LENGTH);
+  if (!usedNames.has(baseName)) {
+    return baseName;
+  }
+
+  let index = 2;
+  while (true) {
+    const suffix = ` (${index})`;
+    const maxBaseLength = MAX_SHEET_NAME_LENGTH - suffix.length;
+    const candidate = `${baseName.slice(0, Math.max(1, maxBaseLength))}${suffix}`;
+    if (!usedNames.has(candidate)) {
+      return candidate;
+    }
+    index += 1;
+  }
+}
+
+function initializeWorkbook(): ExcelJS.Workbook {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Syntropy";
+  workbook.created = new Date();
+  workbook.modified = new Date();
+  return workbook;
+}
+
+function addTaskWorksheet(
+  workbook: ExcelJS.Workbook,
+  tasks: SyntropyTask[],
+  sheetName: string
+): ExcelJS.Worksheet {
+  const activeTasks = tasks.filter((task) => !task.deletedAt);
+
+  const worksheet = workbook.addWorksheet(sheetName, {
+    views: [
+      {
+        state: "frozen",
+        xSplit: 1, // Freeze first column (ID)
+        ySplit: 1, // Freeze header row
+      },
+    ],
+  });
+
+  worksheet.columns = COLUMNS.map((col) => ({
+    header: col.header,
+    key: col.key,
+    width: col.width,
+  }));
+
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  headerRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF1a1a2e" },
+  };
+  headerRow.alignment = { vertical: "middle", horizontal: "center" };
+  headerRow.height = 24;
+
+  activeTasks.forEach((task) => {
+    const row = worksheet.addRow({
+      id: task.id,
+      status: STATUS_DISPLAY[task.status] || task.status,
+      content: task.content,
+      priority: task.priority ? PRIORITY_DISPLAY[task.priority] : "",
+      startDate: task.startDate || "",
+      endDate: task.endDate || "",
+      createdAt: formatDateTime(task.createdAt),
+      updatedAt: formatDateTime(task.updatedAt),
+    });
+
+    if (task.priority && PRIORITY_COLORS[task.priority]) {
+      row.eachCell((cell) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: PRIORITY_COLORS[task.priority!] },
+        };
+      });
+    }
+
+    if (task.status === "done") {
+      const contentCell = row.getCell("content");
+      contentCell.font = {
+        strike: true,
+        color: { argb: "FF9CA3AF" },
+      };
+    }
+
+    row.alignment = { vertical: "middle", wrapText: true };
+    row.getCell("id").alignment = { horizontal: "left" };
+    row.getCell("status").alignment = { horizontal: "center" };
+    row.getCell("priority").alignment = { horizontal: "center" };
+    row.getCell("startDate").alignment = { horizontal: "center" };
+    row.getCell("endDate").alignment = { horizontal: "center" };
+    row.getCell("createdAt").alignment = { horizontal: "center" };
+    row.getCell("updatedAt").alignment = { horizontal: "center" };
+  });
+
+  worksheet.eachRow((row) => {
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFE5E7EB" } },
+        left: { style: "thin", color: { argb: "FFE5E7EB" } },
+        bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+        right: { style: "thin", color: { argb: "FFE5E7EB" } },
+      };
+    });
+  });
+
+  worksheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: COLUMNS.length },
+  };
+
+  return worksheet;
+}
+
 /**
  * Export tasks to styled Excel workbook using ExcelJS
  *
@@ -70,106 +196,37 @@ function formatDateTime(isoString: string): string {
  * @returns ExcelJS Workbook
  */
 export function createStyledWorkbook(tasks: SyntropyTask[], projectName: string): ExcelJS.Workbook {
-  const activeTasks = tasks.filter((task) => !task.deletedAt);
-  const workbook = new ExcelJS.Workbook();
+  const workbook = initializeWorkbook();
+  const usedNames = new Set<string>();
+  const sheetName = getUniqueSheetName(projectName, usedNames);
+  usedNames.add(sheetName);
+  addTaskWorksheet(workbook, tasks, sheetName);
+  return workbook;
+}
 
-  // Set workbook properties
-  workbook.creator = "Syntropy";
-  workbook.created = new Date();
-  workbook.modified = new Date();
+/**
+ * Export multiple projects to a single workbook with multiple sheets
+ */
+export function createStyledWorkbookForProjects(
+  projects: { projectName: string; tasks: SyntropyTask[] }[]
+): ExcelJS.Workbook {
+  const workbook = initializeWorkbook();
+  const usedNames = new Set<string>();
 
-  // Create worksheet
-  const worksheet = workbook.addWorksheet(projectName, {
-    views: [
-      {
-        state: "frozen",
-        xSplit: 1, // Freeze first column (ID)
-        ySplit: 1, // Freeze header row
-      },
-    ],
+  projects.forEach(({ projectName, tasks }) => {
+    const sheetName = getUniqueSheetName(projectName, usedNames);
+    usedNames.add(sheetName);
+    addTaskWorksheet(workbook, tasks, sheetName);
   });
-
-  // Set columns
-  worksheet.columns = COLUMNS.map((col) => ({
-    header: col.header,
-    key: col.key,
-    width: col.width,
-  }));
-
-  // Style header row
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  headerRow.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FF1a1a2e" }, // Dark purple matching Syntropy theme
-  };
-  headerRow.alignment = { vertical: "middle", horizontal: "center" };
-  headerRow.height = 24;
-
-  // Add data rows
-  activeTasks.forEach((task) => {
-    const row = worksheet.addRow({
-      id: task.id,
-      status: STATUS_DISPLAY[task.status] || task.status,
-      content: task.content,
-      priority: task.priority ? PRIORITY_DISPLAY[task.priority] : "",
-      startDate: task.startDate || "",
-      endDate: task.endDate || "",
-      createdAt: formatDateTime(task.createdAt),
-      updatedAt: formatDateTime(task.updatedAt),
-    });
-
-    // Apply priority-based row background
-    if (task.priority && PRIORITY_COLORS[task.priority]) {
-      row.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: PRIORITY_COLORS[task.priority!] },
-        };
-      });
-    }
-
-    // Style done tasks with strikethrough
-    if (task.status === "done") {
-      const contentCell = row.getCell("content");
-      contentCell.font = {
-        strike: true,
-        color: { argb: "FF9CA3AF" }, // Gray color
-      };
-    }
-
-    // Align cells
-    row.alignment = { vertical: "middle", wrapText: true };
-    row.getCell("id").alignment = { horizontal: "left" };
-    row.getCell("status").alignment = { horizontal: "center" };
-    row.getCell("priority").alignment = { horizontal: "center" };
-    row.getCell("startDate").alignment = { horizontal: "center" };
-    row.getCell("endDate").alignment = { horizontal: "center" };
-    row.getCell("createdAt").alignment = { horizontal: "center" };
-    row.getCell("updatedAt").alignment = { horizontal: "center" };
-  });
-
-  // Add borders to all cells
-  worksheet.eachRow((row, _rowNumber) => {
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: "thin", color: { argb: "FFE5E7EB" } },
-        left: { style: "thin", color: { argb: "FFE5E7EB" } },
-        bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
-        right: { style: "thin", color: { argb: "FFE5E7EB" } },
-      };
-    });
-  });
-
-  // Auto-filter for header
-  worksheet.autoFilter = {
-    from: { row: 1, column: 1 },
-    to: { row: 1, column: COLUMNS.length },
-  };
 
   return workbook;
+}
+
+function getTimestamp(): string {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  return `${date}_${time}`;
 }
 
 /**
@@ -189,12 +246,30 @@ export async function exportStyledExcel(tasks: SyntropyTask[], projectName: stri
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10);
-  const time = now.toTimeString().slice(0, 5).replace(":", "");
-  const timestamp = `${date}_${time}`;
-  const fileName = `${projectName}_${timestamp}.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = getExcelFilename(projectName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
+/**
+ * Export multiple projects to styled Excel file and trigger download
+ */
+export async function exportStyledExcelForProjects(
+  projects: { projectName: string; tasks: SyntropyTask[] }[]
+): Promise<void> {
+  const workbook = createStyledWorkbookForProjects(projects);
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  const fileName = getExcelFilenameForProjects(projects.map((project) => project.projectName));
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -218,22 +293,35 @@ export async function generateExcelBase64(
 ): Promise<string> {
   const workbook = createStyledWorkbook(tasks, projectName);
 
-  // Generate buffer
   const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer).toString("base64");
+}
 
-  // Convert to Base64
-  const base64 = Buffer.from(buffer).toString("base64");
-
-  return base64;
+/**
+ * Generate Excel as Base64 string for multiple projects
+ */
+export async function generateExcelBase64ForProjects(
+  projects: { projectName: string; tasks: SyntropyTask[] }[]
+): Promise<string> {
+  const workbook = createStyledWorkbookForProjects(projects);
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer).toString("base64");
 }
 
 /**
  * Get Excel filename with timestamp
  */
 export function getExcelFilename(projectName: string): string {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10);
-  const time = now.toTimeString().slice(0, 5).replace(":", "");
-  const timestamp = `${date}_${time}`;
-  return `${projectName}_${timestamp}.xlsx`;
+  return `${projectName}_${getTimestamp()}.xlsx`;
+}
+
+/**
+ * Get Excel filename for multiple projects
+ */
+export function getExcelFilenameForProjects(projectNames: string[]): string {
+  if (projectNames.length === 1) {
+    return getExcelFilename(projectNames[0]);
+  }
+  const baseName = projectNames[0]?.trim() || "多项目";
+  return `${baseName}_等${projectNames.length}个项目_${getTimestamp()}.xlsx`;
 }

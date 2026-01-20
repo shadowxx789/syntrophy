@@ -8,9 +8,10 @@ import type {
   PromptPreset,
   SavedCustomProvider,
   CustomProviderExport,
+  SavedRecipient,
 } from "@/types";
-import { MAX_CUSTOM_PROVIDERS } from "@/types";
-import { getOrCreateDeviceId, generateCustomProviderId } from "@/lib/generateId";
+import { MAX_CUSTOM_PROVIDERS, MAX_SAVED_RECIPIENTS } from "@/types";
+import { getOrCreateDeviceId, generateCustomProviderId, generateUUID } from "@/lib/generateId";
 
 interface SettingsState extends Settings {
   // ─────────────────────────────────────────────────────────────────────────
@@ -77,6 +78,30 @@ interface SettingsState extends Settings {
     mode: "merge" | "replace"
   ) => { added: number; skipped: number };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 常用收件人管理 Actions
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** 添加常用收件人 */
+  addSavedRecipient: (
+    recipient: Omit<SavedRecipient, "id" | "createdAt" | "lastUsedAt">
+  ) => SavedRecipient | null;
+
+  /** 更新常用收件人 */
+  updateSavedRecipient: (
+    id: string,
+    updates: Partial<Omit<SavedRecipient, "id" | "createdAt">>
+  ) => boolean;
+
+  /** 删除常用收件人 */
+  deleteSavedRecipient: (id: string) => boolean;
+
+  /** 标记收件人为已使用 */
+  markRecipientUsed: (id: string) => boolean;
+
+  /** 获取常用收件人列表 */
+  getSavedRecipients: () => SavedRecipient[];
+
   /** 初始化设置 (从存储加载后调用) */
   initialize: () => void;
 }
@@ -91,6 +116,7 @@ export const useSettingsStore = create<SettingsState>()(
       geminiModel: undefined,
       savedCustomProviders: [],
       selectedCustomProviderId: undefined,
+      savedRecipients: [],
       customPrompts: undefined,
       theme: "system",
       deviceId: "",
@@ -317,6 +343,112 @@ export const useSettingsStore = create<SettingsState>()(
         return { added, skipped };
       },
 
+      // ─────────────────────────────────────────────────────────────────────────
+      // 常用收件人管理
+      // ─────────────────────────────────────────────────────────────────────────
+
+      addSavedRecipient: (recipient) => {
+        const current = get().savedRecipients || [];
+        const email = recipient.email.trim().toLowerCase();
+        if (!email) {
+          return null;
+        }
+
+        const existingIndex = current.findIndex((item) => item.email === email);
+        if (existingIndex !== -1) {
+          const updated = [...current];
+          const existing = updated[existingIndex];
+          updated[existingIndex] = {
+            ...existing,
+            label: recipient.label?.trim() || existing.label,
+            lastUsedAt: new Date().toISOString(),
+          };
+          set({ savedRecipients: updated });
+          return updated[existingIndex];
+        }
+
+        if (current.length >= MAX_SAVED_RECIPIENTS) {
+          return null;
+        }
+
+        const newRecipient: SavedRecipient = {
+          id: generateUUID(),
+          email,
+          label: recipient.label?.trim() || undefined,
+          createdAt: new Date().toISOString(),
+          lastUsedAt: new Date().toISOString(),
+        };
+
+        set({ savedRecipients: [...current, newRecipient] });
+        return newRecipient;
+      },
+
+      updateSavedRecipient: (id, updates) => {
+        const current = get().savedRecipients || [];
+        const index = current.findIndex((item) => item.id === id);
+
+        if (index === -1) {
+          return false;
+        }
+
+        const nextEmail = updates.email?.trim().toLowerCase();
+        if (nextEmail) {
+          const duplicate = current.find((item) => item.email === nextEmail && item.id !== id);
+          if (duplicate) {
+            return false;
+          }
+        }
+
+        const updated = [...current];
+        const nextLabel =
+          updates.label === undefined ? updated[index].label : updates.label.trim() || undefined;
+        updated[index] = {
+          ...updated[index],
+          ...updates,
+          email: nextEmail || updated[index].email,
+          label: nextLabel,
+        };
+
+        set({ savedRecipients: updated });
+        return true;
+      },
+
+      deleteSavedRecipient: (id) => {
+        const current = get().savedRecipients || [];
+        const filtered = current.filter((item) => item.id !== id);
+
+        if (filtered.length === current.length) {
+          return false;
+        }
+
+        set({ savedRecipients: filtered });
+        return true;
+      },
+
+      markRecipientUsed: (id) => {
+        const current = get().savedRecipients || [];
+        const index = current.findIndex((item) => item.id === id);
+
+        if (index === -1) {
+          return false;
+        }
+
+        const updated = [...current];
+        updated[index] = { ...updated[index], lastUsedAt: new Date().toISOString() };
+
+        set({ savedRecipients: updated });
+        return true;
+      },
+
+      getSavedRecipients: () => {
+        const current = get().savedRecipients || [];
+        return [...current].sort((a, b) => {
+          const timeA = a.lastUsedAt || a.createdAt;
+          const timeB = b.lastUsedAt || b.createdAt;
+          return new Date(timeB).getTime() - new Date(timeA).getTime();
+        });
+      },
+
       initialize: () => {
         // 确保设备ID存在
         if (!get().deviceId) {
@@ -364,6 +496,7 @@ export const useSettingsStore = create<SettingsState>()(
         geminiModel: state.geminiModel,
         savedCustomProviders: state.savedCustomProviders,
         selectedCustomProviderId: state.selectedCustomProviderId,
+        savedRecipients: state.savedRecipients,
         customPrompts: state.customPrompts,
         theme: state.theme,
         deviceId: state.deviceId,

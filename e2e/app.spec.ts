@@ -23,6 +23,15 @@ test.describe("Home Page", () => {
     const defaultProjectTab = page.getByRole("button", { name: /默认项目/i });
     await expect(defaultProjectTab).toBeVisible();
   });
+
+  test("should open export modal", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /导出/i }).click();
+
+    await expect(page.getByRole("heading", { name: /导出项目/i })).toBeVisible();
+    await expect(page.getByText(/选择项目/i)).toBeVisible();
+  });
 });
 
 test.describe("Task Management", () => {
