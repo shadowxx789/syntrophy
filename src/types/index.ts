@@ -283,6 +283,55 @@ export interface DiffResult {
 }
 
 // ============================================================================
+// 多 Sheet 导入相关类型
+// ============================================================================
+
+/**
+ * Sheet 到项目的映射配置
+ */
+export interface SheetMapping {
+  /** Sheet 名称 */
+  sheetName: string;
+
+  /** 目标项目 ID，null 表示跳过，"__new__" 表示创建新项目 */
+  targetProjectId: string | null;
+
+  /** 创建新项目时的名称 */
+  newProjectName?: string;
+}
+
+/**
+ * 单个项目的差异结果
+ */
+export interface ProjectDiff {
+  /** Sheet 名称 */
+  sheetName: string;
+
+  /** 项目 ID */
+  projectId: string;
+
+  /** 项目名称 */
+  projectName: string;
+
+  /** 是否为新建项目 */
+  isNewProject: boolean;
+
+  /** 差异结果 */
+  diff: DiffResult;
+}
+
+/**
+ * 多项目差异结果
+ */
+export interface MultiProjectDiffResult {
+  /** 各项目的差异 */
+  projectDiffs: ProjectDiff[];
+}
+
+/** 创建新项目的特殊标识 */
+export const IMPORT_NEW_PROJECT_ID = "__new__";
+
+// ============================================================================
 // 设置相关类型
 // ============================================================================
 

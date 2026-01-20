@@ -242,7 +242,7 @@ export function EmailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <svg
@@ -292,7 +292,7 @@ export function EmailModal({
             </p>
           </div>
         ) : (
-          <div className="space-y-4 py-4">
+          <div className="flex-1 space-y-4 overflow-y-auto py-4">
             {/* Project Selection */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">

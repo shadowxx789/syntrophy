@@ -2,6 +2,34 @@ import * as XLSX from "xlsx";
 import type { TaskPriority, TaskStatus } from "@/types";
 
 /**
+ * 单个 Sheet 的解析结果
+ */
+export interface SheetParseResult {
+  /** Sheet 名称 */
+  sheetName: string;
+
+  /** 成功解析的任务 */
+  tasks: ImportedTask[];
+
+  /** 解析错误 */
+  errors: Array<{
+    row: number;
+    message: string;
+  }>;
+}
+
+/**
+ * 整个工作簿的解析结果
+ */
+export interface WorkbookParseResult {
+  /** 所有 Sheet 的解析结果 */
+  sheets: SheetParseResult[];
+
+  /** 文件名 */
+  fileName: string;
+}
+
+/**
  * Excel 导入结果
  */
 export interface ImportedTask {
@@ -101,10 +129,9 @@ export async function parseExcelFile(file: File): Promise<ImportParseResult> {
         const worksheet = workbook.Sheets[sheetName];
 
         // 转换为 JSON（保留表头）
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-          worksheet,
-          { header: 1 }
-        );
+        const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+          header: 1,
+        });
 
         if (jsonData.length < 2) {
           resolve({
@@ -154,9 +181,7 @@ export async function parseExcelFile(file: File): Promise<ImportParseResult> {
 /**
  * 映射列名到字段
  */
-function mapColumns(
-  headers: string[]
-): Map<number, keyof ImportedTask> {
+function mapColumns(headers: string[]): Map<number, keyof ImportedTask> {
   const map = new Map<number, keyof ImportedTask>();
 
   headers.forEach((header, index) => {
@@ -297,4 +322,87 @@ function parseDate(value: unknown): string | undefined {
  */
 function formatDate(date: Date): string {
   return date.toISOString().split("T")[0];
+}
+
+/**
+ * 解析单个 Sheet
+ */
+function parseSheet(worksheet: XLSX.WorkSheet, sheetName: string): SheetParseResult {
+  const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+    header: 1,
+  });
+
+  if (jsonData.length < 2) {
+    return {
+      sheetName,
+      tasks: [],
+      errors: [{ row: 0, message: "Sheet 为空或只有表头" }],
+    };
+  }
+
+  // 解析表头
+  const headers = (jsonData[0] as unknown as unknown[]).map((h) => String(h ?? "").trim());
+  const columnMap = mapColumns(headers as string[]);
+
+  // 解析数据行
+  const tasks: ImportedTask[] = [];
+  const errors: Array<{ row: number; message: string }> = [];
+
+  for (let i = 1; i < jsonData.length; i++) {
+    const row = jsonData[i] as unknown as unknown[];
+    if (!row || (Array.isArray(row) && row.every((cell) => !cell))) continue;
+
+    try {
+      const task = parseRow(row, columnMap, i + 1);
+      if (task) {
+        tasks.push(task);
+      }
+    } catch (error) {
+      errors.push({
+        row: i + 1,
+        message: error instanceof Error ? error.message : "解析失败",
+      });
+    }
+  }
+
+  return { sheetName, tasks, errors };
+}
+
+/**
+ * 解析整个 Excel 工作簿（所有 Sheet）
+ */
+export async function parseExcelWorkbook(file: File): Promise<WorkbookParseResult> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        if (!data) {
+          reject(new Error("文件读取失败"));
+          return;
+        }
+
+        const workbook = XLSX.read(data, { type: "binary", cellDates: true });
+        const sheets: SheetParseResult[] = [];
+
+        // 遍历所有 Sheet
+        for (const sheetName of workbook.SheetNames) {
+          const worksheet = workbook.Sheets[sheetName];
+          const sheetResult = parseSheet(worksheet, sheetName);
+          sheets.push(sheetResult);
+        }
+
+        resolve({
+          sheets,
+          fileName: file.name,
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = () => reject(new Error("文件读取失败"));
+    reader.readAsBinaryString(file);
+  });
 }
