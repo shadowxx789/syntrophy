@@ -289,7 +289,7 @@ export interface DiffResult {
 export type AIProvider = "openai" | "deepseek" | "gemini" | "custom";
 
 /**
- * 自定义 AI 提供商配置
+ * 自定义 AI 提供商配置 (基础配置，用于临时表单)
  */
 export interface CustomAIConfig {
   /** 自定义名称 (用于显示) */
@@ -302,18 +302,71 @@ export interface CustomAIConfig {
   model: string;
 }
 
-export interface Settings {
-  /** AI 服务商 */
-  aiProvider: AIProvider;
+/**
+ * 已保存的自定义提供商配置 (包含完整信息)
+ */
+export interface SavedCustomProvider {
+  /** 唯一标识符，格式: CUSTOM-xxxxxxxx */
+  id: string;
+
+  /** 显示名称 */
+  name: string;
+
+  /** API Base URL */
+  baseUrl: string;
+
+  /** 默认模型 */
+  model: string;
 
   /** 加密后的 API Key */
   encryptedApiKey?: string;
 
-  /** 自定义 AI 配置 (当 aiProvider === "custom" 时使用) */
+  /** 创建时间 (ISO 8601) */
+  createdAt: string;
+
+  /** 最后使用时间 (ISO 8601) */
+  lastUsedAt?: string;
+}
+
+/**
+ * 自定义提供商导出格式 (不含 API Key，安全分享)
+ */
+export interface CustomProviderExport {
+  /** 导出格式版本 */
+  version: 1;
+
+  /** 导出时间 (ISO 8601) */
+  exportedAt: string;
+
+  /** 提供商列表 */
+  providers: {
+    name: string;
+    baseUrl: string;
+    model: string;
+  }[];
+}
+
+/** 最大自定义提供商数量 */
+export const MAX_CUSTOM_PROVIDERS = 10;
+
+export interface Settings {
+  /** AI 服务商 */
+  aiProvider: AIProvider;
+
+  /** 加密后的 API Key (用于 OpenAI/DeepSeek/Gemini) */
+  encryptedApiKey?: string;
+
+  /** 自定义 AI 配置 (当 aiProvider === "custom" 时使用，向后兼容) */
   customAIConfig?: CustomAIConfig;
 
   /** Gemini 模型 (当 aiProvider === "gemini" 时使用) */
   geminiModel?: string;
+
+  /** 已保存的自定义提供商列表 */
+  savedCustomProviders?: SavedCustomProvider[];
+
+  /** 当前选中的自定义提供商 ID */
+  selectedCustomProviderId?: string;
 
   /** 自定义 AI 提示词配置 */
   customPrompts?: CustomPromptConfig;

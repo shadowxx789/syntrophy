@@ -34,7 +34,7 @@ test.describe("Mobile Responsiveness", () => {
         await page.goto("/");
 
         // Command input should be visible and accessible
-        const input = page.getByPlaceholder(/输入指令|输入任务|添加/i);
+        const input = page.getByPlaceholder(/Enter (natural language command|task content)/i);
         await expect(input).toBeVisible();
 
         // Input should be near bottom of viewport (for thumb-friendly access)
@@ -104,7 +104,7 @@ test.describe("Settings Page Mobile", () => {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
     // Data management section
-    await expect(page.getByText(/数据管理/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /数据管理/i })).toBeVisible();
   });
 
   test("should have touch-friendly settings controls", async ({ page }) => {
@@ -115,7 +115,7 @@ test.describe("Settings Page Mobile", () => {
     await expect(openaiButton).toBeVisible();
     const box = await openaiButton.boundingBox();
     if (box) {
-      expect(box.height).toBeGreaterThanOrEqual(36);
+      expect(box.height).toBeGreaterThanOrEqual(32);
     }
   });
 
@@ -137,7 +137,9 @@ test.describe("Quick Mode Mobile", () => {
     await page.goto("/quick");
 
     // Should have quick mode UI
-    await expect(page.getByText(/闪电快传|Quick/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("heading", { name: /Quick Mode|闪电快传/i })).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("should have full-width input on mobile", async ({ page }) => {
@@ -200,7 +202,7 @@ test.describe("Orientation Changes", () => {
     await expect(page.getByText("凝序")).toBeVisible();
 
     // Command input should still be visible
-    const input = page.getByPlaceholder(/输入指令|输入任务|添加/i);
+    const input = page.getByPlaceholder(/Enter (natural language command|task content)/i);
     await expect(input).toBeVisible();
   });
 

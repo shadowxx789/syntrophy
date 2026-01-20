@@ -108,3 +108,16 @@ export function generateOperationId(): string {
 export function generateUUID(): string {
   return crypto.randomUUID();
 }
+
+/**
+ * 生成自定义提供商 ID
+ * 格式: CUSTOM-xxxxxxxx (8位随机十六进制)
+ */
+export function generateCustomProviderId(): string {
+  const randomBytes = new Uint8Array(4);
+  crypto.getRandomValues(randomBytes);
+  const hex = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `CUSTOM-${hex}`;
+}

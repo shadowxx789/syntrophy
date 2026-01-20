@@ -10,6 +10,10 @@ import {
   AlertCircle,
   ChevronDown,
   RotateCcw,
+  Plus,
+  Settings2,
+  Download,
+  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -38,7 +42,10 @@ import {
   DEFAULT_USER_PROMPT_TEMPLATE,
   DEFAULT_CONTEXT_PROMPT_TEMPLATE,
 } from "@/lib/ai/prompts";
-import type { AIProvider, PromptPreset } from "@/types";
+import type { AIProvider, PromptPreset, CustomProviderExport } from "@/types";
+import { MAX_CUSTOM_PROVIDERS } from "@/types";
+import { CustomProviderModal } from "@/components/CustomProviderModal";
+import { CustomProviderCard } from "@/components/CustomProviderCard";
 
 export default function SettingsPage() {
   const {
@@ -49,6 +56,8 @@ export default function SettingsPage() {
     customPrompts,
     theme,
     deviceId,
+    savedCustomProviders,
+    selectedCustomProviderId,
     setAIProvider,
     setEncryptedApiKey,
     setCustomAIConfig,
@@ -56,6 +65,10 @@ export default function SettingsPage() {
     setCustomPrompts,
     resetPrompts,
     setTheme,
+    selectCustomProvider,
+    getSelectedCustomProvider,
+    exportCustomProviders,
+    importCustomProviders,
   } = useSettingsStore();
 
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -68,6 +81,11 @@ export default function SettingsPage() {
   const [customName, setCustomName] = useState(customAIConfig?.name || "");
   const [customBaseUrl, setCustomBaseUrl] = useState(customAIConfig?.baseUrl || "");
   const [customModel, setCustomModel] = useState(customAIConfig?.model || "");
+
+  // 多配置管理状态
+  const [providerModalOpen, setProviderModalOpen] = useState(false);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // 提示词配置状态
   const [promptsEnabled, setPromptsEnabled] = useState(customPrompts?.enabled ?? false);
@@ -271,7 +289,78 @@ export default function SettingsPage() {
     setContextPromptTemplate("");
   };
 
-  const providerDisplayName = getProviderDisplayName(aiProvider, customAIConfig);
+  // 打开添加配置模态框
+  const handleOpenAddModal = () => {
+    setEditingProviderId(null);
+    setProviderModalOpen(true);
+  };
+
+  // 打开编辑配置模态框
+  const handleOpenEditModal = (providerId: string) => {
+    setEditingProviderId(providerId);
+    setProviderModalOpen(true);
+  };
+
+  // 选择已保存的自定义配置
+  const handleSelectSavedProvider = (providerId: string) => {
+    selectCustomProvider(providerId);
+    setValidationResult(null);
+    setMaskedKey("");
+    setApiKeyInput("");
+  };
+
+  // 导出配置
+  const handleExportConfigs = () => {
+    const exportData = exportCustomProviders();
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `syntropy-ai-providers-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // 导入配置
+  const handleImportConfigs = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as CustomProviderExport;
+
+        // 验证格式
+        if (data.version !== 1 || !Array.isArray(data.providers)) {
+          setImportError("导入文件格式不正确");
+          return;
+        }
+
+        const result = importCustomProviders(data, "merge");
+        setImportError(null);
+        alert(`导入完成：添加 ${result.added} 个，跳过 ${result.skipped} 个`);
+      } catch {
+        setImportError("导入失败，请检查文件格式");
+      }
+    };
+    input.click();
+  };
+
+  // 获取当前选中的自定义配置
+  const selectedProvider = getSelectedCustomProvider();
+
+  const providerDisplayName = getProviderDisplayName(
+    aiProvider,
+    selectedProvider || customAIConfig
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -321,12 +410,44 @@ export default function SettingsPage() {
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuItem onClick={() => handleProviderChange("custom")}>
-                    手动配置
+                <DropdownMenuContent align="start" className="w-64">
+                  {/* 添加新配置 */}
+                  <DropdownMenuItem onClick={handleOpenAddModal} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    添加新配置
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {savedCustomProviders?.length || 0}/{MAX_CUSTOM_PROVIDERS}
+                    </span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {COMMON_CUSTOM_PROVIDERS.map((preset) => (
+
+                  {/* 已保存的配置 */}
+                  {savedCustomProviders && savedCustomProviders.length > 0 ? (
+                    <>
+                      {savedCustomProviders.map((provider) => (
+                        <DropdownMenuItem
+                          key={provider.id}
+                          onClick={() => handleSelectSavedProvider(provider.id)}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex flex-col">
+                            <span>{provider.name}</span>
+                            <span className="text-xs text-muted-foreground">{provider.model}</span>
+                          </div>
+                          {selectedCustomProviderId === provider.id && aiProvider === "custom" && (
+                            <Check className="h-4 w-4 text-primary" />
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </>
+                  ) : null}
+
+                  {/* 快速预设（用于添加） */}
+                  <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                    快速预设
+                  </DropdownMenuItem>
+                  {COMMON_CUSTOM_PROVIDERS.slice(0, 3).map((preset) => (
                     <DropdownMenuItem key={preset.name} onClick={() => handleSelectPreset(preset)}>
                       <div className="flex flex-col">
                         <span>{preset.name}</span>
@@ -339,55 +460,66 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* 自定义配置表单 */}
+          {/* 自定义配置管理 */}
           {aiProvider === "custom" && (
-            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-              <h3 className="text-sm font-medium">自定义提供商配置</h3>
+            <div className="space-y-4">
+              {/* 当前选中的配置卡片 */}
+              {selectedProvider ? (
+                <CustomProviderCard provider={selectedProvider} onEdit={handleOpenEditModal} />
+              ) : (
+                <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-center">
+                  <Settings2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    尚未选择自定义配置，请从上方下拉菜单选择或添加新配置
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3 gap-1"
+                    onClick={handleOpenAddModal}
+                  >
+                    <Plus className="h-4 w-4" />
+                    添加配置
+                  </Button>
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">名称</label>
-                <Input
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="如: 本地 Ollama"
-                  className="h-9"
-                />
-              </div>
+              {/* 导入/导出按钮 */}
+              {savedCustomProviders && savedCustomProviders.length > 0 && (
+                <div className="flex items-center justify-between border-t pt-4">
+                  <p className="text-xs text-muted-foreground">
+                    已保存 {savedCustomProviders.length} 个自定义配置
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={handleExportConfigs}
+                    >
+                      <Download className="h-4 w-4" />
+                      导出
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={handleImportConfigs}
+                    >
+                      <Upload className="h-4 w-4" />
+                      导入
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">
-                  API Base URL (OpenAI 兼容格式)
-                </label>
-                <Input
-                  value={customBaseUrl}
-                  onChange={(e) => setCustomBaseUrl(e.target.value)}
-                  placeholder="https://api.example.com/v1"
-                  className="h-9 font-mono text-sm"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">模型名称</label>
-                <Input
-                  value={customModel}
-                  onChange={(e) => setCustomModel(e.target.value)}
-                  placeholder="如: gpt-4, llama3.2, qwen2.5"
-                  className="h-9 font-mono text-sm"
-                />
-              </div>
-
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleSaveCustomConfig}
-                disabled={!customName.trim() || !customBaseUrl.trim() || !customModel.trim()}
-              >
-                保存配置
-              </Button>
-
-              <p className="text-xs text-muted-foreground">
-                支持所有 OpenAI Chat Completions API 兼容的服务。
-              </p>
+              {/* 导入错误提示 */}
+              {importError && (
+                <p className="flex items-center gap-1 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  {importError}
+                </p>
+              )}
             </div>
           )}
 
@@ -663,6 +795,13 @@ export default function SettingsPage() {
           </div>
         </section>
       </main>
+
+      {/* 自定义提供商添加/编辑模态框 */}
+      <CustomProviderModal
+        providerId={editingProviderId}
+        open={providerModalOpen}
+        onOpenChange={setProviderModalOpen}
+      />
     </div>
   );
 }

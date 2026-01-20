@@ -12,7 +12,7 @@ test.describe("Home Page", () => {
     await page.goto("/");
 
     // Command input should be visible
-    const commandInput = page.getByPlaceholder(/输入指令|输入任务|添加/i);
+    const commandInput = page.getByPlaceholder(/Enter (natural language command|task content)/i);
     await expect(commandInput).toBeVisible();
   });
 
@@ -20,8 +20,8 @@ test.describe("Home Page", () => {
     await page.goto("/");
 
     // Should have at least one tab
-    const tabs = page.locator('[role="tablist"], [data-testid="tab-nav"]');
-    await expect(tabs).toBeVisible();
+    const defaultProjectTab = page.getByRole("button", { name: /默认项目/i });
+    await expect(defaultProjectTab).toBeVisible();
   });
 });
 
@@ -30,7 +30,7 @@ test.describe("Task Management", () => {
     await page.goto("/");
 
     // Find the command input
-    const commandInput = page.getByPlaceholder(/输入指令|输入任务|添加/i);
+    const commandInput = page.getByPlaceholder(/Enter (natural language command|task content)/i);
 
     // Type a new task
     await commandInput.fill("测试任务一");
@@ -38,19 +38,19 @@ test.describe("Task Management", () => {
 
     // Wait for the task to appear (might need AI processing or direct add)
     // This test assumes the task appears in the list
-    await expect(page.getByText("测试任务一")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("p", { hasText: "测试任务一" })).toBeVisible({ timeout: 10000 });
   });
 
   test("should toggle task completion", async ({ page }) => {
     await page.goto("/");
 
     // Add a task first
-    const commandInput = page.getByPlaceholder(/输入指令|输入任务|添加/i);
+    const commandInput = page.getByPlaceholder(/Enter (natural language command|task content)/i);
     await commandInput.fill("待完成任务");
     await commandInput.press("Enter");
 
     // Wait for task to appear
-    await expect(page.getByText("待完成任务")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("p", { hasText: "待完成任务" })).toBeVisible({ timeout: 10000 });
 
     // Find the checkbox and click it
     const checkbox = page.locator('[role="checkbox"]').first();
@@ -78,7 +78,7 @@ test.describe("Settings Page", () => {
 
     // Should be on settings page
     await expect(page).toHaveURL(/settings/);
-    await expect(page.getByText(/AI 服务配置|设置/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /AI 服务配置/i })).toBeVisible();
   });
 
   test("should display AI provider options", async ({ page }) => {
@@ -88,6 +88,31 @@ test.describe("Settings Page", () => {
     await expect(page.getByRole("button", { name: /OpenAI/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /DeepSeek/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Gemini/i })).toBeVisible();
+  });
+
+  test("should open custom provider modal and add config", async ({ page }) => {
+    await page.goto("/settings");
+
+    const customButton = page.getByRole("button", { name: /自定义/i }).first();
+    await customButton.click();
+
+    await page.getByRole("menuitem", { name: /添加新配置/i }).click();
+
+    await expect(page.getByRole("heading", { name: /添加自定义配置/i })).toBeVisible();
+
+    await page.getByPlaceholder(/Moonshot|Ollama|配置名称/i).fill("测试提供商");
+    await page
+      .getByPlaceholder(/https:\/\/api\.example\.com\/v1/i)
+      .fill("https://api.test-provider.com/v1");
+    await page.getByPlaceholder(/gpt-4o|llama3\.2|qwen2\.5/i).fill("test-model");
+
+    await page.getByRole("button", { name: /添加配置/i }).click();
+
+    // Select the newly added provider
+    await customButton.click();
+    await page.getByRole("menuitem", { name: /测试提供商/i }).click();
+
+    await expect(page.getByRole("heading", { name: "测试提供商" })).toBeVisible();
   });
 
   test("should show Gemini model selection when Gemini is selected", async ({ page }) => {
@@ -122,7 +147,9 @@ test.describe("Quick Mode Page", () => {
     await page.goto("/quick");
 
     // Should have quick mode title or input
-    await expect(page.getByText(/闪电快传|Quick/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("heading", { name: /Quick Mode|闪电快传/i })).toBeVisible({
+      timeout: 5000,
+    });
   });
 });
 

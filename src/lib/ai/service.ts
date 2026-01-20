@@ -3,7 +3,7 @@
  * 支持 OpenAI、DeepSeek 及自定义 OpenAI 兼容 API
  */
 
-import type { AIProvider, CustomAIConfig } from "@/types";
+import type { AIProvider, CustomAIConfig, SavedCustomProvider } from "@/types";
 
 export interface AIMessage {
   role: "system" | "user" | "assistant";
@@ -26,7 +26,7 @@ export interface AIServiceConfig {
   temperature?: number;
   maxTokens?: number;
   /** 自定义提供商配置 (当 provider === "custom" 时必须) */
-  customConfig?: CustomAIConfig;
+  customConfig?: CustomAIConfig | SavedCustomProvider;
 }
 
 /**
@@ -228,7 +228,7 @@ export async function validateApiKey(config: AIServiceConfig): Promise<boolean> 
  */
 export function getProviderDisplayName(
   provider: AIProvider,
-  customConfig?: CustomAIConfig
+  customConfig?: CustomAIConfig | SavedCustomProvider
 ): string {
   if (provider === "custom" && customConfig) {
     return customConfig.name || "自定义";
