@@ -75,8 +75,10 @@ export interface Database {
           content: string;
           start_date: string | null;
           end_date: string | null;
-          status: "todo" | "in_progress" | "done";
-          priority: "low" | "medium" | "high" | null;
+          status: "pending" | "in_progress" | "completed" | "delayed";
+          pic: string | null;
+          completed_date: string | null;
+          remark: string | null;
           raw_command: string | null;
           created_at: string;
           updated_at: string;
@@ -89,8 +91,10 @@ export interface Database {
           content: string;
           start_date?: string | null;
           end_date?: string | null;
-          status?: "todo" | "in_progress" | "done";
-          priority?: "low" | "medium" | "high" | null;
+          status?: "pending" | "in_progress" | "completed" | "delayed";
+          pic?: string | null;
+          completed_date?: string | null;
+          remark?: string | null;
           raw_command?: string | null;
           created_at: string;
           updated_at: string;
@@ -103,8 +107,10 @@ export interface Database {
           content?: string;
           start_date?: string | null;
           end_date?: string | null;
-          status?: "todo" | "in_progress" | "done";
-          priority?: "low" | "medium" | "high" | null;
+          status?: "pending" | "in_progress" | "completed" | "delayed";
+          pic?: string | null;
+          completed_date?: string | null;
+          remark?: string | null;
           raw_command?: string | null;
           created_at?: string;
           updated_at?: string;

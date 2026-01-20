@@ -14,13 +14,13 @@ export function exportToExcel(tasks: SyntropyTask[], projectName: string): void 
   // 转换为 Excel 行数据
   const rows = activeTasks.map((task) => ({
     ID: task.id,
-    状态: task.status === "done" ? "✓ 已完成" : "○ 待办",
     内容: task.content,
-    优先级: task.priority ? { high: "高", medium: "中", low: "低" }[task.priority] : "",
+    PIC: task.pic || "",
     开始日期: task.startDate || "",
     截止日期: task.endDate || "",
-    创建时间: formatDateTime(task.createdAt),
-    更新时间: formatDateTime(task.updatedAt),
+    完成日期: task.completedDate || "",
+    状态: mapStatusToDisplay(task.status),
+    备注: task.remark || "",
   }));
 
   // 创建工作簿
@@ -32,13 +32,13 @@ export function exportToExcel(tasks: SyntropyTask[], projectName: string): void 
   // 设置列宽
   worksheet["!cols"] = [
     { wch: 16 }, // ID
-    { wch: 10 }, // 状态
     { wch: 40 }, // 内容
-    { wch: 8 }, // 优先级
+    { wch: 15 }, // PIC
     { wch: 12 }, // 开始日期
     { wch: 12 }, // 截止日期
-    { wch: 18 }, // 创建时间
-    { wch: 18 }, // 更新时间
+    { wch: 12 }, // 完成日期
+    { wch: 10 }, // 状态
+    { wch: 30 }, // 备注
   ];
 
   // 添加工作表到工作簿
@@ -53,6 +53,19 @@ export function exportToExcel(tasks: SyntropyTask[], projectName: string): void 
 
   // 触发下载
   XLSX.writeFile(workbook, fileName);
+}
+
+/**
+ * 将状态转换为显示文本
+ */
+function mapStatusToDisplay(status: SyntropyTask["status"]): string {
+  const statusMap = {
+    pending: "○ 待开始",
+    in_progress: "◐ 进行中",
+    completed: "✓ 已完成",
+    delayed: "⚠ 滞后",
+  };
+  return statusMap[status] || "";
 }
 
 /**
@@ -98,10 +111,12 @@ export async function parseExcelFile(file: File): Promise<Partial<SyntropyTask>[
         const tasks: Partial<SyntropyTask>[] = jsonData.map((row) => ({
           id: String(row["ID"] || ""),
           content: String(row["内容"] || ""),
-          status: String(row["状态"]).includes("完成") ? "done" : "todo",
-          priority: mapPriority(String(row["优先级"] || "")),
+          pic: String(row["PIC"] || "") || undefined,
           startDate: parseDate(row["开始日期"]),
           endDate: parseDate(row["截止日期"]),
+          completedDate: parseDate(row["完成日期"]),
+          status: parseStatus(String(row["状态"] || "")),
+          remark: String(row["备注"] || "") || undefined,
         }));
 
         resolve(tasks);
@@ -116,13 +131,14 @@ export async function parseExcelFile(file: File): Promise<Partial<SyntropyTask>[
 }
 
 /**
- * 映射优先级
+ * 解析状态
  */
-function mapPriority(value: string): "high" | "medium" | "low" | undefined {
-  if (value === "高") return "high";
-  if (value === "中") return "medium";
-  if (value === "低") return "low";
-  return undefined;
+function parseStatus(value: string): SyntropyTask["status"] {
+  const trimmedValue = value.trim();
+  if (trimmedValue.includes("完成")) return "completed";
+  if (trimmedValue.includes("进行中")) return "in_progress";
+  if (trimmedValue.includes("滞后")) return "delayed";
+  return "pending";
 }
 
 /**

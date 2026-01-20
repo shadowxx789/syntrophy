@@ -13,8 +13,10 @@ const createExistingTask = (overrides: Partial<SyntropyTask> = {}): SyntropyTask
   id: "SYN-2026-0001",
   projectId: "PROJ-0001",
   content: "Test task",
-  status: "todo",
-  priority: undefined,
+  status: "pending",
+  pic: undefined,
+  completedDate: undefined,
+  remark: undefined,
   startDate: undefined,
   endDate: undefined,
   version: 1,
@@ -28,8 +30,10 @@ const createExistingTask = (overrides: Partial<SyntropyTask> = {}): SyntropyTask
 const createImportedTask = (overrides: Partial<ImportedTask> = {}): ImportedTask => ({
   rowNumber: 1,
   content: "Test task",
-  status: "todo",
-  priority: undefined,
+  status: "pending",
+  pic: undefined,
+  completedDate: undefined,
+  remark: undefined,
   startDate: undefined,
   endDate: undefined,
   ...overrides,
@@ -66,7 +70,7 @@ describe("diffTasks", () => {
       createImportedTask({
         id: "SYN-2026-0001",
         content: "Updated content",
-        status: "done",
+        status: "completed",
       }),
     ];
     const existing: SyntropyTask[] = [createExistingTask()];
@@ -121,7 +125,7 @@ describe("diffTasks", () => {
       createImportedTask({
         id: "SYN-2026-0001",
         content: "Test task",
-        status: "todo",
+        status: "pending",
       }),
     ];
     const existing: SyntropyTask[] = [createExistingTask()];
@@ -133,19 +137,19 @@ describe("diffTasks", () => {
     expect(result.deleted).toHaveLength(0);
   });
 
-  it("should detect priority changes", () => {
+  it("should detect pic changes", () => {
     const imported: ImportedTask[] = [
       createImportedTask({
         id: "SYN-2026-0001",
-        priority: "high",
+        pic: "Alice",
       }),
     ];
-    const existing: SyntropyTask[] = [createExistingTask({ priority: "low" })];
+    const existing: SyntropyTask[] = [createExistingTask({ pic: "Bob" })];
 
     const result = diffTasks(imported, existing);
 
     expect(result.modified).toHaveLength(1);
-    expect(result.modified[0].changedFields).toContain("priority");
+    expect(result.modified[0].changedFields).toContain("pic");
   });
 
   it("should detect date changes", () => {

@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { TaskPriority, TaskStatus } from "@/types";
+import type { TaskStatus } from "@/types";
 
 /**
  * 单个 Sheet 的解析结果
@@ -42,14 +42,20 @@ export interface ImportedTask {
   /** 状态 */
   status: TaskStatus;
 
-  /** 优先级 */
-  priority?: TaskPriority;
+  /** 负责人 (PIC) */
+  pic?: string;
 
   /** 开始日期 */
   startDate?: string;
 
   /** 截止日期 */
   endDate?: string;
+
+  /** 完成日期 */
+  completedDate?: string;
+
+  /** 备注 */
+  remark?: string;
 
   /** 原始行号（用于错误报告） */
   rowNumber: number;
@@ -86,17 +92,19 @@ const COLUMN_MAPPING: Record<string, keyof ImportedTask | null> = {
   内容: "content",
   任务内容: "content",
   任务: "content",
-  描述: "content",
   Content: "content",
   Task: "content",
+
+  // PIC 列
+  PIC: "pic",
+  pic: "pic",
+  负责人: "pic",
+  责任人: "pic",
+  Owner: "pic",
 
   // 状态列
   状态: "status",
   Status: "status",
-
-  // 优先级列
-  优先级: "priority",
-  Priority: "priority",
 
   // 日期列
   开始日期: "startDate",
@@ -107,6 +115,18 @@ const COLUMN_MAPPING: Record<string, keyof ImportedTask | null> = {
   结束日期: "endDate",
   "End Date": "endDate",
   "Due Date": "endDate",
+  完成日期: "completedDate",
+  完成时间: "completedDate",
+  "Complete Date": "completedDate",
+  "Completed Date": "completedDate",
+
+  // 备注列
+  备注: "remark",
+  备注说明: "remark",
+  说明: "remark",
+  Remark: "remark",
+  Notes: "remark",
+  描述: "remark",
 };
 
 /**
@@ -221,13 +241,18 @@ function parseRow(
         task.status = parseStatus(String(value));
         break;
 
-      case "priority":
-        task.priority = parsePriority(String(value));
+      case "pic":
+        task.pic = String(value).trim();
         break;
 
       case "startDate":
       case "endDate":
+      case "completedDate":
         task[field] = parseDate(value);
+        break;
+
+      case "remark":
+        task.remark = String(value).trim();
         break;
     }
   });
@@ -239,11 +264,13 @@ function parseRow(
 
   return {
     content: task.content,
-    status: task.status || "todo",
+    status: task.status || "pending",
     id: task.id,
-    priority: task.priority,
+    pic: task.pic,
     startDate: task.startDate,
     endDate: task.endDate,
+    completedDate: task.completedDate,
+    remark: task.remark,
     rowNumber,
   };
 }
@@ -252,31 +279,26 @@ function parseRow(
  * 解析状态
  */
 function parseStatus(value: string): TaskStatus {
-  const lower = value.toLowerCase().trim();
+  const trimmed = value.trim();
 
   if (
-    lower.includes("完成") ||
-    lower.includes("done") ||
-    lower.includes("✓") ||
-    lower.includes("√")
+    trimmed.includes("完成") ||
+    trimmed.includes("done") ||
+    trimmed.includes("✓") ||
+    trimmed.includes("√")
   ) {
-    return "done";
+    return "completed";
   }
 
-  return "todo";
-}
+  if (trimmed.includes("进行中") || trimmed.includes("in progress") || trimmed.includes("◐")) {
+    return "in_progress";
+  }
 
-/**
- * 解析优先级
- */
-function parsePriority(value: string): TaskPriority | undefined {
-  const lower = value.toLowerCase().trim();
+  if (trimmed.includes("滞后") || trimmed.includes("delayed") || trimmed.includes("⚠")) {
+    return "delayed";
+  }
 
-  if (lower === "高" || lower === "high" || lower === "h") return "high";
-  if (lower === "中" || lower === "medium" || lower === "m") return "medium";
-  if (lower === "低" || lower === "low" || lower === "l") return "low";
-
-  return undefined;
+  return "pending";
 }
 
 /**

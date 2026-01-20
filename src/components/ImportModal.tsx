@@ -196,7 +196,9 @@ export function ImportModal({ open, onOpenChange }: ImportModalProps) {
             projectId: actualProjectId,
             startDate: task.startDate,
             endDate: task.endDate,
-            priority: task.priority,
+            pic: task.pic,
+            completedDate: task.completedDate,
+            remark: task.remark,
           });
         }
 
@@ -205,9 +207,11 @@ export function ImportModal({ open, onOpenChange }: ImportModalProps) {
           await updateTask(diff.id, {
             content: diff.after.content,
             status: diff.after.status,
-            priority: diff.after.priority,
+            pic: diff.after.pic,
             startDate: diff.after.startDate,
             endDate: diff.after.endDate,
+            completedDate: diff.after.completedDate,
+            remark: diff.after.remark,
           });
         }
 

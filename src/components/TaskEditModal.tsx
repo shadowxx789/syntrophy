@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { UpdateTaskInput, TaskPriority } from "@/types";
+import type { UpdateTaskInput } from "@/types";
 import { useTaskStore } from "@/stores/useTaskStore";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 interface TaskEditModalProps {
@@ -28,8 +28,12 @@ export function TaskEditModal({ taskId, open, onOpenChange }: TaskEditModalProps
   const [content, setContent] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [priority, setPriority] = useState<TaskPriority | "">("");
-  const [isDone, setIsDone] = useState(false);
+  const [completedDate, setCompletedDate] = useState("");
+  const [pic, setPic] = useState("");
+  const [status, setStatus] = useState<"pending" | "in_progress" | "completed" | "delayed">(
+    "pending"
+  );
+  const [remark, setRemark] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const task = tasks.find((t) => t.id === taskId);
@@ -40,8 +44,10 @@ export function TaskEditModal({ taskId, open, onOpenChange }: TaskEditModalProps
       setContent(task.content);
       setStartDate(task.startDate || "");
       setEndDate(task.endDate || "");
-      setPriority(task.priority || "");
-      setIsDone(task.status === "done");
+      setCompletedDate(task.completedDate || "");
+      setPic(task.pic || "");
+      setStatus(task.status);
+      setRemark(task.remark || "");
     }
   }, [task]);
 
@@ -55,8 +61,10 @@ export function TaskEditModal({ taskId, open, onOpenChange }: TaskEditModalProps
         content: content.trim(),
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        priority: (priority as TaskPriority) || undefined,
-        status: isDone ? "done" : "todo",
+        completedDate: completedDate || undefined,
+        pic: pic || undefined,
+        status,
+        remark: remark || undefined,
       };
 
       await updateTask(taskId, updates);
@@ -70,9 +78,16 @@ export function TaskEditModal({ taskId, open, onOpenChange }: TaskEditModalProps
 
   if (!task) return null;
 
+  const statusOptions = [
+    { value: "pending", label: "○ 待开始", color: "text-gray-600" },
+    { value: "in_progress", label: "◐ 进行中", color: "text-blue-600" },
+    { value: "completed", label: "✓ 已完成", color: "text-green-600" },
+    { value: "delayed", label: "⚠ 滞后", color: "text-red-600" },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>编辑任务</DialogTitle>
           <DialogDescription className="font-mono text-xs">{task.id}</DialogDescription>
@@ -81,70 +96,110 @@ export function TaskEditModal({ taskId, open, onOpenChange }: TaskEditModalProps
         <div className="space-y-4 py-4">
           {/* Content */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">任务内容</label>
+            <label htmlFor="content" className="text-sm font-medium">
+              任务内容
+            </label>
             <Input
+              id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="任务内容"
             />
           </div>
 
+          {/* Status */}
+          <div className="space-y-2">
+            <label htmlFor="status" className="text-sm font-medium">
+              状态
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {statusOptions.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={status === option.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatus(option.value as typeof status)}
+                  className={cn(
+                    status === option.value &&
+                      option.value === "completed" &&
+                      "bg-green-500 hover:bg-green-600",
+                    status === option.value &&
+                      option.value === "delayed" &&
+                      "bg-red-500 hover:bg-red-600",
+                    status === option.value &&
+                      option.value === "in_progress" &&
+                      "bg-blue-500 hover:bg-blue-600"
+                  )}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* PIC */}
+          <div className="space-y-2">
+            <label htmlFor="pic" className="text-sm font-medium">
+              负责人 (PIC)
+            </label>
+            <Input
+              id="pic"
+              value={pic}
+              onChange={(e) => setPic(e.target.value)}
+              placeholder="负责人姓名"
+            />
+          </div>
+
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">开始日期</label>
+              <label htmlFor="startDate" className="text-sm font-medium">
+                开始日期
+              </label>
               <Input
+                id="startDate"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">截止日期</label>
+              <label htmlFor="endDate" className="text-sm font-medium">
+                截止日期
+              </label>
               <Input
+                id="endDate"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
-          </div>
-
-          {/* Priority */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">优先级</label>
-            <div className="flex gap-2">
-              {(["low", "medium", "high"] as TaskPriority[]).map((p) => (
-                <Button
-                  key={p}
-                  type="button"
-                  variant={priority === p ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setPriority(priority === p ? "" : p)}
-                  className={cn(
-                    priority === p &&
-                      (p === "high"
-                        ? "bg-red-500 hover:bg-red-600"
-                        : p === "medium"
-                        ? "bg-yellow-500 hover:bg-yellow-600"
-                        : "bg-blue-500 hover:bg-blue-600")
-                  )}
-                >
-                  {p === "high" ? "高" : p === "medium" ? "中" : "低"}
-                </Button>
-              ))}
+            <div className="space-y-2">
+              <label htmlFor="completedDate" className="text-sm font-medium">
+                完成日期
+              </label>
+              <Input
+                id="completedDate"
+                type="date"
+                value={completedDate}
+                onChange={(e) => setCompletedDate(e.target.value)}
+              />
             </div>
           </div>
 
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="status"
-              checked={isDone}
-              onCheckedChange={(checked) => setIsDone(checked === true)}
-            />
-            <label htmlFor="status" className="text-sm">
-              标记为已完成
+          {/* Remark */}
+          <div className="space-y-2">
+            <label htmlFor="remark" className="text-sm font-medium">
+              备注
             </label>
+            <Textarea
+              id="remark"
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              placeholder="备注信息"
+              rows={3}
+            />
           </div>
         </div>
 

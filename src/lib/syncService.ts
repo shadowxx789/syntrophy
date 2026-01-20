@@ -54,8 +54,11 @@ interface RemoteTask {
   content: string;
   start_date: string | null;
   end_date: string | null;
-  status: "todo" | "in_progress" | "done";
-  priority: "low" | "medium" | "high" | null;
+  status: "pending" | "in_progress" | "completed" | "delayed" | "todo" | "done";
+  pic?: string | null;
+  completed_date?: string | null;
+  remark?: string | null;
+  priority?: "low" | "medium" | "high" | null;
   raw_command: string | null;
   created_at: string;
   updated_at: string;
@@ -267,28 +270,30 @@ async function pushChanges(
     .toArray();
 
   // Upsert tasks to Supabase
+  let useLegacySchema = false;
+
   for (const task of localTasks) {
     try {
-      const taskData = {
-        id: task.id,
-        user_id: userId,
-        project_id: task.projectId,
-        content: task.content,
-        start_date: task.startDate || null,
-        end_date: task.endDate || null,
-        status: task.status,
-        priority: task.priority || null,
-        raw_command: task.rawCommand || null,
-        created_at: task.createdAt,
-        updated_at: task.updatedAt,
-        deleted_at: task.deletedAt || null,
-      };
+      const taskData = useLegacySchema
+        ? buildLegacyTaskPayload(task, userId)
+        : buildExtendedTaskPayload(task, userId);
 
       const { error } = await supabase
         .from("tasks")
         .upsert(taskData as never, { onConflict: "id,user_id" });
 
-      if (error) throw error;
+      if (error) {
+        if (!useLegacySchema && isMissingColumnError(error)) {
+          useLegacySchema = true;
+          const fallbackData = buildLegacyTaskPayload(task, userId);
+          const { error: fallbackError } = await supabase
+            .from("tasks")
+            .upsert(fallbackData as never, { onConflict: "id,user_id" });
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw error;
+        }
+      }
       uploaded.tasks++;
     } catch (error) {
       errors.push({
@@ -452,14 +457,17 @@ async function updateSyncMetadata(): Promise<void> {
 // ============================================
 
 function mapRemoteTaskToLocal(remote: RemoteTask): SyntropyTask {
+  const status = normalizeRemoteStatus(remote.status);
   return {
     id: remote.id,
     projectId: remote.project_id,
     content: remote.content,
     startDate: remote.start_date || undefined,
     endDate: remote.end_date || undefined,
-    status: remote.status === "in_progress" ? "todo" : remote.status,
-    priority: remote.priority || undefined,
+    status,
+    pic: remote.pic || undefined,
+    completedDate: remote.completed_date || undefined,
+    remark: remote.remark || undefined,
     rawCommand: remote.raw_command || undefined,
     version: 1,
     createdAt: remote.created_at,
@@ -469,6 +477,67 @@ function mapRemoteTaskToLocal(remote: RemoteTask): SyntropyTask {
     createdBy: remote.user_id,
     updatedBy: remote.user_id,
   };
+}
+
+function normalizeRemoteStatus(
+  status: RemoteTask["status"]
+): SyntropyTask["status"] {
+  if (status === "todo") return "pending";
+  if (status === "done") return "completed";
+  if (status === "pending") return "pending";
+  if (status === "in_progress") return "in_progress";
+  if (status === "completed") return "completed";
+  if (status === "delayed") return "delayed";
+  return "pending";
+}
+
+function mapStatusToLegacy(status: SyntropyTask["status"]): "todo" | "in_progress" | "done" {
+  if (status === "completed") return "done";
+  if (status === "in_progress") return "in_progress";
+  if (status === "delayed") return "in_progress";
+  return "todo";
+}
+
+function buildExtendedTaskPayload(task: SyntropyTask, userId: string) {
+  return {
+    id: task.id,
+    user_id: userId,
+    project_id: task.projectId,
+    content: task.content,
+    start_date: task.startDate || null,
+    end_date: task.endDate || null,
+    status: task.status,
+    pic: task.pic || null,
+    completed_date: task.completedDate || null,
+    remark: task.remark || null,
+    raw_command: task.rawCommand || null,
+    created_at: task.createdAt,
+    updated_at: task.updatedAt,
+    deleted_at: task.deletedAt || null,
+  };
+}
+
+function buildLegacyTaskPayload(task: SyntropyTask, userId: string) {
+  return {
+    id: task.id,
+    user_id: userId,
+    project_id: task.projectId,
+    content: task.content,
+    start_date: task.startDate || null,
+    end_date: task.endDate || null,
+    status: mapStatusToLegacy(task.status),
+    priority: null,
+    raw_command: task.rawCommand || null,
+    created_at: task.createdAt,
+    updated_at: task.updatedAt,
+    deleted_at: task.deletedAt || null,
+  };
+}
+
+function isMissingColumnError(error: unknown): boolean {
+  if (!(error && typeof error === "object" && "message" in error)) return false;
+  const message = String((error as { message?: string }).message || "");
+  return message.includes("column") && message.includes("does not exist");
 }
 
 function mapRemoteProjectToLocal(remote: RemoteProject): SyntropyProject {

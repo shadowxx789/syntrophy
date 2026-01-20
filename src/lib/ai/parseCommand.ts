@@ -22,7 +22,9 @@ interface AIParseResult {
     content?: string;
     startDate?: string | null;
     endDate?: string | null;
-    priority?: string | null;
+    status?: string | null;
+    pic?: string | null;
+    remark?: string | null;
   };
   targetDescription?: string;
   reasoning?: string;
@@ -116,7 +118,7 @@ function tryQuickMatch(input: string): ParsedCommand | null {
     return {
       action: "UPDATE",
       confidence: 0.9,
-      task: { status: "done" },
+      task: { status: "completed" },
       rawInput: input,
     };
   }
@@ -169,20 +171,7 @@ function normalizeResult(result: AIParseResult, rawInput: string): ParsedCommand
   };
 
   const action = actionMap[result.action?.toUpperCase()] || "UNKNOWN";
-
-  // 规范化 priority
-  const priorityMap: Record<string, "high" | "medium" | "low"> = {
-    high: "high",
-    medium: "medium",
-    low: "low",
-    高: "high",
-    中: "medium",
-    低: "low",
-  };
-
-  const priority = result.task?.priority
-    ? priorityMap[result.task.priority.toLowerCase()] || undefined
-    : undefined;
+  const normalizedStatus = normalizeStatus(result.task?.status || undefined);
 
   // 构建结果
   const parsed: ParsedCommand = {
@@ -197,12 +186,14 @@ function normalizeResult(result: AIParseResult, rawInput: string): ParsedCommand
       content: result.task.content || rawInput,
       startDate: result.task.startDate || undefined,
       endDate: result.task.endDate || undefined,
-      priority,
+      status: normalizedStatus,
+      pic: result.task.pic || undefined,
+      remark: result.task.remark || undefined,
     };
 
     // COMPLETE 动作特殊处理
     if (result.action?.toUpperCase() === "COMPLETE") {
-      parsed.task.status = "done";
+      parsed.task.status = "completed";
     }
   }
 
@@ -212,6 +203,29 @@ function normalizeResult(result: AIParseResult, rawInput: string): ParsedCommand
   }
 
   return parsed;
+}
+
+function normalizeStatus(value?: string | null): SyntropyTask["status"] | undefined {
+  if (!value) return undefined;
+  const normalized = value.toLowerCase().trim();
+
+  if (normalized.includes("completed") || normalized.includes("done") || normalized.includes("完成")) {
+    return "completed";
+  }
+  if (
+    normalized.includes("in_progress") ||
+    normalized.includes("in progress") ||
+    normalized.includes("进行中")
+  ) {
+    return "in_progress";
+  }
+  if (normalized.includes("delayed") || normalized.includes("滞后") || normalized.includes("延期")) {
+    return "delayed";
+  }
+  if (normalized.includes("pending") || normalized.includes("todo") || normalized.includes("待")) {
+    return "pending";
+  }
+  return undefined;
 }
 
 /**

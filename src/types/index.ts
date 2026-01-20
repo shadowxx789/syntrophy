@@ -7,8 +7,7 @@
 // 任务相关类型
 // ============================================================================
 
-export type TaskStatus = "todo" | "done";
-export type TaskPriority = "low" | "medium" | "high";
+export type TaskStatus = "pending" | "in_progress" | "completed" | "delayed";
 
 /**
  * 核心任务模型 - 同步就绪版本
@@ -33,8 +32,14 @@ export interface SyntropyTask {
   /** 任务状态 */
   status: TaskStatus;
 
-  /** 优先级 */
-  priority?: TaskPriority;
+  /** 负责人 (PIC - Person In Charge) */
+  pic?: string;
+
+  /** 完成日期 (ISO 8601: YYYY-MM-DD) */
+  completedDate?: string;
+
+  /** 备注 */
+  remark?: string;
 
   /** 原始语音/文本指令 */
   rawCommand?: string;
@@ -73,13 +78,18 @@ export interface SyntropyTask {
  * 创建任务的输入类型 (省略自动生成的字段)
  */
 export type CreateTaskInput = Pick<SyntropyTask, "content" | "projectId"> &
-  Partial<Pick<SyntropyTask, "startDate" | "endDate" | "priority" | "rawCommand">>;
+  Partial<
+    Pick<SyntropyTask, "startDate" | "endDate" | "pic" | "completedDate" | "remark" | "rawCommand">
+  >;
 
 /**
  * 更新任务的输入类型
  */
 export type UpdateTaskInput = Partial<
-  Pick<SyntropyTask, "content" | "startDate" | "endDate" | "status" | "priority">
+  Pick<
+    SyntropyTask,
+    "content" | "startDate" | "endDate" | "status" | "pic" | "completedDate" | "remark"
+  >
 >;
 
 // ============================================================================

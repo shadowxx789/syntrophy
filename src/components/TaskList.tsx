@@ -38,19 +38,23 @@ export function TaskList({ onEditTask }: TaskListProps) {
   }
 
   // 分组：未完成 + 已完成
-  const todoTasks = tasks.filter((t) => t.status === "todo");
-  const doneTasks = tasks.filter((t) => t.status === "done");
+  const pendingTasks = tasks.filter((t) => t.status === "pending");
+  const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
+  const delayedTasks = tasks.filter((t) => t.status === "delayed");
+  const completedTasks = tasks.filter((t) => t.status === "completed");
+
+  const activeTasks = [...pendingTasks, ...inProgressTasks, ...delayedTasks];
 
   return (
     <div className="space-y-4 p-4">
       {/* 未完成任务 */}
-      {todoTasks.length > 0 && (
+      {activeTasks.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-muted-foreground">
-            待办 ({todoTasks.length})
+            进行中 ({activeTasks.length})
           </h3>
           <div className="space-y-2">
-            {todoTasks.map((task) => (
+            {activeTasks.map((task) => (
               <TaskCard key={task.id} task={task} onEdit={onEditTask} />
             ))}
           </div>
@@ -58,13 +62,13 @@ export function TaskList({ onEditTask }: TaskListProps) {
       )}
 
       {/* 已完成任务 */}
-      {doneTasks.length > 0 && (
+      {completedTasks.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-muted-foreground">
-            已完成 ({doneTasks.length})
+            已完成 ({completedTasks.length})
           </h3>
           <div className="space-y-2">
-            {doneTasks.map((task) => (
+            {completedTasks.map((task) => (
               <TaskCard key={task.id} task={task} onEdit={onEditTask} />
             ))}
           </div>

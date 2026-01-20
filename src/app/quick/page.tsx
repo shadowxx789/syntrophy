@@ -45,7 +45,7 @@ export default function QuickModePage() {
           id: await generateTaskId(),
           projectId: "QUICK-MODE",
           content: line,
-          status: "todo" as const,
+          status: "pending" as const,
           version: 1,
           createdAt: now,
           updatedAt: now,
@@ -73,9 +73,7 @@ export default function QuickModePage() {
       }
     } catch (error) {
       setPageState("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Unexpected error"
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Unexpected error");
     }
   };
 
@@ -95,22 +93,15 @@ export default function QuickModePage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Quick Mode</h1>
-              <p className="mt-1 text-sm text-white/70">
-                Generate and send task lists instantly
-              </p>
+              <p className="mt-1 text-sm text-white/70">Generate and send task lists instantly</p>
             </div>
             <Link href="/">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white/80 hover:text-white hover:bg-white/10"
+                className="text-white/80 hover:bg-white/10 hover:text-white"
               >
-                <svg
-                  className="mr-2 h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -128,7 +119,7 @@ export default function QuickModePage() {
       {/* Main Content */}
       <main className="mx-auto max-w-xl px-4 py-8">
         {pageState === "success" ? (
-          <div className="rounded-xl border bg-white dark:bg-slate-900 p-8 text-center shadow-sm">
+          <div className="rounded-xl border bg-white p-8 text-center shadow-sm dark:bg-slate-900">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
               <svg
                 className="h-8 w-8 text-green-600 dark:text-green-400"
@@ -160,7 +151,7 @@ export default function QuickModePage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border bg-white dark:bg-slate-900 p-6 shadow-sm">
+          <div className="rounded-xl border bg-white p-6 shadow-sm dark:bg-slate-900">
             <div className="space-y-6">
               {/* Project Name */}
               <div className="space-y-2">
@@ -178,9 +169,7 @@ export default function QuickModePage() {
                 <label className="text-sm font-medium">
                   Tasks{" "}
                   {taskLines.length > 0 && (
-                    <span className="text-muted-foreground">
-                      ({taskLines.length} items)
-                    </span>
+                    <span className="text-muted-foreground">({taskLines.length} items)</span>
                   )}
                 </label>
                 <textarea
@@ -189,7 +178,7 @@ export default function QuickModePage() {
                   placeholder="Enter tasks, one per line...&#10;&#10;Example:&#10;Complete project proposal&#10;Review client feedback&#10;Schedule team meeting"
                   rows={8}
                   disabled={pageState === "sending"}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
 
@@ -205,9 +194,7 @@ export default function QuickModePage() {
                     disabled={pageState === "sending"}
                     className={cn(
                       "pr-10",
-                      email &&
-                        !emailValid &&
-                        "border-red-500 focus-visible:ring-red-500"
+                      email && !emailValid && "border-red-500 focus-visible:ring-red-500"
                     )}
                   />
                   {email && (
@@ -248,14 +235,9 @@ export default function QuickModePage() {
 
               {/* Error Message */}
               {pageState === "error" && errorMessage && (
-                <div className="rounded-md bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
                   <div className="flex items-center gap-2">
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -277,11 +259,7 @@ export default function QuickModePage() {
               >
                 {pageState === "sending" ? (
                   <span className="flex items-center gap-2">
-                    <svg
-                      className="h-4 w-4 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle
                         className="opacity-25"
                         cx="12"
@@ -300,12 +278,7 @@ export default function QuickModePage() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -323,10 +296,10 @@ export default function QuickModePage() {
 
         {/* Info Card */}
         {pageState === "input" && (
-          <div className="mt-6 rounded-xl border bg-blue-50 dark:bg-blue-950/30 p-4 text-sm">
+          <div className="mt-6 rounded-xl border bg-blue-50 p-4 text-sm dark:bg-blue-950/30">
             <div className="flex gap-3">
               <svg
-                className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -341,8 +314,8 @@ export default function QuickModePage() {
               <div className="text-blue-800 dark:text-blue-200">
                 <p className="font-medium">About Quick Mode</p>
                 <p className="mt-1 text-blue-700 dark:text-blue-300">
-                  Quick Mode generates a styled Excel file from your task list
-                  and sends it directly via email. No data is saved locally.
+                  Quick Mode generates a styled Excel file from your task list and sends it directly
+                  via email. No data is saved locally.
                 </p>
               </div>
             </div>

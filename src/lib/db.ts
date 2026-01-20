@@ -49,6 +49,48 @@ class SyntropyDatabase extends Dexie {
       offlineQueue: "id, entityType, entityId, timestamp",
     });
 
+    // 版本 2: 重构任务数据结构（删除 priority，新增 pic/completedDate/remark，更新 status）
+    this.version(2)
+      .stores({
+        // 任务表索引（保持不变）
+        tasks: "id, projectId, status, createdAt, updatedAt, deletedAt, ownerId",
+        projects: "id, displayOrder, isArchived, createdAt, deletedAt, ownerId",
+        operations: "id, entityType, entityId, timestamp, synced, lamportClock",
+        counters: "name",
+        syncMetadata: "deviceId",
+        offlineQueue: "id, entityType, entityId, timestamp",
+      })
+      .upgrade(async (tx) => {
+        // 数据迁移：
+        // 1. status: "todo" -> "pending", "done" -> "completed"
+        // 2. 删除 priority 字段（Dexie 会自动忽略旧字段）
+        const tasks = await tx.table("tasks").toArray();
+        const updates: SyntropyTask[] = [];
+
+        for (const task of tasks) {
+          const updatedTask: SyntropyTask = { ...task };
+
+          // 迁移状态
+          if (task.status === "todo") {
+            updatedTask.status = "pending";
+          } else if (task.status === "done") {
+            updatedTask.status = "completed";
+          }
+
+          // 如果是 completed 状态且有 endDate，则设置 completedDate
+          if (updatedTask.status === "completed" && task.endDate) {
+            updatedTask.completedDate = task.endDate;
+          }
+
+          // 删除 priority（通过不包含该字段来实现）
+          delete (updatedTask as unknown as { priority?: string }).priority;
+
+          updates.push(updatedTask);
+        }
+
+        await tx.table("tasks").bulkPut(updates);
+      });
+
     // 映射类型 (Dexie 4.x 语法)
     this.tasks.mapToClass(
       class implements SyntropyTask {
@@ -57,8 +99,10 @@ class SyntropyDatabase extends Dexie {
         content!: string;
         startDate?: string;
         endDate?: string;
-        status!: "todo" | "done";
-        priority?: "low" | "medium" | "high";
+        status!: "pending" | "in_progress" | "completed" | "delayed";
+        pic?: string;
+        completedDate?: string;
+        remark?: string;
         rawCommand?: string;
         version!: number;
         createdAt!: string;

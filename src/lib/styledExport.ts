@@ -6,39 +6,23 @@ import type { SyntropyTask } from "@/types";
  */
 const COLUMNS = [
   { header: "ID", key: "id", width: 18, locked: true },
-  { header: "状态", key: "status", width: 10 },
   { header: "内容", key: "content", width: 45 },
-  { header: "优先级", key: "priority", width: 10 },
+  { header: "PIC", key: "pic", width: 15 },
   { header: "开始日期", key: "startDate", width: 14 },
   { header: "截止日期", key: "endDate", width: 14 },
-  { header: "创建时间", key: "createdAt", width: 20 },
-  { header: "更新时间", key: "updatedAt", width: 20 },
+  { header: "完成日期", key: "completedDate", width: 14 },
+  { header: "状态", key: "status", width: 12 },
+  { header: "备注", key: "remark", width: 35 },
 ] as const;
-
-/**
- * Priority color mapping
- */
-const PRIORITY_COLORS: Record<string, string> = {
-  high: "FFFEE2E2", // Light red
-  medium: "FFFEF3C7", // Light yellow
-  low: "FFD1FAE5", // Light green
-};
 
 /**
  * Status display mapping
  */
 const STATUS_DISPLAY: Record<string, string> = {
-  done: "✓ 已完成",
-  todo: "○ 待办",
-};
-
-/**
- * Priority display mapping
- */
-const PRIORITY_DISPLAY: Record<string, string> = {
-  high: "高",
-  medium: "中",
-  low: "低",
+  pending: "○ 待开始",
+  in_progress: "◐ 进行中",
+  completed: "✓ 已完成",
+  delayed: "⚠ 滞后",
 };
 
 /**
@@ -125,26 +109,17 @@ function addTaskWorksheet(
   activeTasks.forEach((task) => {
     const row = worksheet.addRow({
       id: task.id,
-      status: STATUS_DISPLAY[task.status] || task.status,
       content: task.content,
-      priority: task.priority ? PRIORITY_DISPLAY[task.priority] : "",
+      pic: task.pic || "",
       startDate: task.startDate || "",
       endDate: task.endDate || "",
-      createdAt: formatDateTime(task.createdAt),
-      updatedAt: formatDateTime(task.updatedAt),
+      completedDate: task.completedDate || "",
+      status: STATUS_DISPLAY[task.status] || task.status,
+      remark: task.remark || "",
     });
 
-    if (task.priority && PRIORITY_COLORS[task.priority]) {
-      row.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: PRIORITY_COLORS[task.priority!] },
-        };
-      });
-    }
-
-    if (task.status === "done") {
+    // 已完成任务样式：删除线 + 灰色文字
+    if (task.status === "completed") {
       const contentCell = row.getCell("content");
       contentCell.font = {
         strike: true,
@@ -152,14 +127,26 @@ function addTaskWorksheet(
       };
     }
 
+    // 滞后任务样式：淡红色背景
+    if (task.status === "delayed") {
+      row.eachCell((cell) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFEE2E2" },
+        };
+      });
+    }
+
     row.alignment = { vertical: "middle", wrapText: true };
     row.getCell("id").alignment = { horizontal: "left" };
-    row.getCell("status").alignment = { horizontal: "center" };
-    row.getCell("priority").alignment = { horizontal: "center" };
+    row.getCell("content").alignment = { horizontal: "left", vertical: "top" };
+    row.getCell("pic").alignment = { horizontal: "left" };
     row.getCell("startDate").alignment = { horizontal: "center" };
     row.getCell("endDate").alignment = { horizontal: "center" };
-    row.getCell("createdAt").alignment = { horizontal: "center" };
-    row.getCell("updatedAt").alignment = { horizontal: "center" };
+    row.getCell("completedDate").alignment = { horizontal: "center" };
+    row.getCell("status").alignment = { horizontal: "center" };
+    row.getCell("remark").alignment = { horizontal: "left", vertical: "top" };
   });
 
   worksheet.eachRow((row) => {

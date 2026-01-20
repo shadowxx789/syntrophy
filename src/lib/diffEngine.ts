@@ -52,9 +52,11 @@ export function diffTasks(imported: ImportedTask[], existing: SyntropyTask[]): D
         projectId: "", // 将在实际创建时设置
         content: imp.content,
         status: imp.status,
-        priority: imp.priority,
+        pic: imp.pic,
         startDate: imp.startDate,
         endDate: imp.endDate,
+        completedDate: imp.completedDate,
+        remark: imp.remark,
         version: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -93,8 +95,8 @@ function detectChanges(existing: SyntropyTask, imported: ImportedTask): (keyof S
     changes.push("status");
   }
 
-  if (imported.priority !== existing.priority) {
-    changes.push("priority");
+  if (imported.pic !== existing.pic) {
+    changes.push("pic");
   }
 
   if (imported.startDate !== existing.startDate) {
@@ -103,6 +105,14 @@ function detectChanges(existing: SyntropyTask, imported: ImportedTask): (keyof S
 
   if (imported.endDate !== existing.endDate) {
     changes.push("endDate");
+  }
+
+  if (imported.completedDate !== existing.completedDate) {
+    changes.push("completedDate");
+  }
+
+  if (imported.remark !== existing.remark) {
+    changes.push("remark");
   }
 
   return changes;
@@ -116,9 +126,11 @@ function mergeTask(existing: SyntropyTask, imported: ImportedTask): SyntropyTask
     ...existing,
     content: imported.content || existing.content,
     status: imported.status,
-    priority: imported.priority,
+    pic: imported.pic,
     startDate: imported.startDate,
     endDate: imported.endDate,
+    completedDate: imported.completedDate,
+    remark: imported.remark,
     updatedAt: new Date().toISOString(),
   };
 }

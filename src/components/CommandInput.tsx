@@ -130,7 +130,9 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
           projectId: currentProjectId,
           startDate: command.task.startDate,
           endDate: command.task.endDate,
-          priority: command.task.priority,
+          pic: command.task.pic,
+          completedDate: command.task.completedDate,
+          remark: command.task.remark,
           rawCommand: command.rawInput,
         });
 
@@ -167,9 +169,11 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
         const updates: UpdateTaskInput = {};
         if (command.task?.content) updates.content = command.task.content;
         if (command.task?.status) updates.status = command.task.status;
-        if (command.task?.priority) updates.priority = command.task.priority;
+        if (command.task?.pic) updates.pic = command.task.pic;
         if (command.task?.startDate) updates.startDate = command.task.startDate;
         if (command.task?.endDate) updates.endDate = command.task.endDate;
+        if (command.task?.completedDate) updates.completedDate = command.task.completedDate;
+        if (command.task?.remark) updates.remark = command.task.remark;
 
         if (Object.keys(updates).length === 0) {
           throw new Error("请说明要修改的内容");
@@ -251,9 +255,12 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
         const updates: UpdateTaskInput = {};
         if (pendingCommand.task?.content) updates.content = pendingCommand.task.content;
         if (pendingCommand.task?.status) updates.status = pendingCommand.task.status;
-        if (pendingCommand.task?.priority) updates.priority = pendingCommand.task.priority;
+        if (pendingCommand.task?.pic) updates.pic = pendingCommand.task.pic;
         if (pendingCommand.task?.startDate) updates.startDate = pendingCommand.task.startDate;
         if (pendingCommand.task?.endDate) updates.endDate = pendingCommand.task.endDate;
+        if (pendingCommand.task?.completedDate)
+          updates.completedDate = pendingCommand.task.completedDate;
+        if (pendingCommand.task?.remark) updates.remark = pendingCommand.task.remark;
 
         if (Object.keys(updates).length === 0) {
           throw new Error("请说明要修改的内容");

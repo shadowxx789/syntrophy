@@ -73,8 +73,10 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       content: input.content,
       startDate: input.startDate,
       endDate: input.endDate,
-      status: "todo",
-      priority: input.priority,
+      status: "pending",
+      pic: input.pic,
+      completedDate: input.completedDate,
+      remark: input.remark,
       rawCommand: input.rawCommand,
       version: 1,
       createdAt: now,
@@ -152,8 +154,13 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
     const task = get().tasks.find((t) => t.id === id);
     if (!task) return;
 
+    const newStatus: "pending" | "completed" =
+      task.status === "completed" ? "pending" : "completed";
+
     await get().updateTask(id, {
-      status: task.status === "todo" ? "done" : "todo",
+      status: newStatus,
+      // 切换状态时更新 completedDate
+      completedDate: newStatus === "completed" ? new Date().toISOString().split("T")[0] : undefined,
     });
   },
 
