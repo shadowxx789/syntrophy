@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Download, Upload, Mail, Settings } from "lucide-react";
+import { Download, Upload, Mail, Settings, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useProjectStore } from "@/stores/useProjectStore";
@@ -190,6 +190,17 @@ export default function HomePage() {
           <Button variant="outline" size="sm" onClick={() => setImportModalOpen(true)}>
             <Upload className="mr-1 h-4 w-4" />
             导入
+          </Button>
+
+          {/* Quick Mode Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/quick")}
+            className="border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
+          >
+            <Zap className="mr-1 h-4 w-4" />
+            闪电
           </Button>
 
           {/* Settings Button */}
