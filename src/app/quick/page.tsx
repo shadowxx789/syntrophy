@@ -2,8 +2,9 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Download, Send } from "lucide-react";
+import { ArrowLeft, Plus, Download, Send, Trash2 } from "lucide-react";
 import type { SyntropyTask } from "@/types";
+import { MAX_SAVED_RECIPIENTS } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { QuickTaskCard } from "@/components/QuickTaskCard";
@@ -18,6 +19,7 @@ import {
 import { exportStyledExcel } from "@/lib/styledExport";
 import { sendEmail } from "@/app/actions/sendEmail";
 import { generateTaskId, getOrCreateDeviceId } from "@/lib/generateId";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
 type PageState = "input" | "sending" | "success" | "error";
 
@@ -47,6 +49,13 @@ export default function QuickModePage() {
   const [email, setEmail] = useState("");
   const [pageState, setPageState] = useState<PageState>("input");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // 常用收件人
+  const [recipientLabel, setRecipientLabel] = useState("");
+  const [recipientError, setRecipientError] = useState<string | null>(null);
+  const { addSavedRecipient, deleteSavedRecipient, markRecipientUsed, getSavedRecipients } =
+    useSettingsStore();
+  const savedRecipients = getSavedRecipients();
 
   const emailValid = isValidEmail(email);
   const canSend = emailValid && tasks.length > 0 && projectName.trim();
@@ -114,6 +123,44 @@ export default function QuickModePage() {
   }, []);
 
   /**
+   * 选择常用收件人
+   */
+  const handleSelectRecipient = useCallback(
+    (recipientId: string) => {
+      const recipient = savedRecipients.find((r) => r.id === recipientId);
+      if (recipient) {
+        setEmail(recipient.email);
+        setRecipientError(null);
+        markRecipientUsed(recipient.id);
+      }
+    },
+    [savedRecipients, markRecipientUsed]
+  );
+
+  /**
+   * 保存为常用收件人
+   */
+  const handleSaveRecipient = useCallback(() => {
+    setRecipientError(null);
+    if (!isValidEmail(email)) {
+      setRecipientError("请输入有效邮箱");
+      return;
+    }
+
+    const result = addSavedRecipient({
+      email: email.trim(),
+      label: recipientLabel.trim() || undefined,
+    });
+
+    if (!result) {
+      setRecipientError(`最多只能保存 ${MAX_SAVED_RECIPIENTS} 个常用收件人`);
+      return;
+    }
+
+    setRecipientLabel("");
+  }, [email, recipientLabel, addSavedRecipient]);
+
+  /**
    * 仅下载 Excel
    */
   const handleDownload = async () => {
@@ -148,6 +195,11 @@ export default function QuickModePage() {
       });
 
       if (result.success) {
+        // 标记收件人已使用
+        const matchedRecipient = savedRecipients.find((r) => r.email === email.trim());
+        if (matchedRecipient) {
+          markRecipientUsed(matchedRecipient.id);
+        }
         setPageState("success");
       } else {
         setPageState("error");
@@ -315,7 +367,10 @@ export default function QuickModePage() {
                 <Input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setRecipientError(null);
+                  }}
                   placeholder="email@example.com"
                   disabled={pageState === "sending"}
                   className={cn(
@@ -360,6 +415,69 @@ export default function QuickModePage() {
               {email && !emailValid && (
                 <p className="mt-1 text-xs text-red-500">请输入有效的邮箱地址</p>
               )}
+
+              {/* 常用收件人列表 */}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">常用收件人</label>
+                  <span className="text-xs text-muted-foreground">
+                    {savedRecipients.length}/{MAX_SAVED_RECIPIENTS}
+                  </span>
+                </div>
+                {savedRecipients.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">暂无常用收件人</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {savedRecipients.map((recipient) => (
+                      <div key={recipient.id} className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => handleSelectRecipient(recipient.id)}
+                          disabled={pageState === "sending"}
+                        >
+                          {recipient.label
+                            ? `${recipient.label} (${recipient.email})`
+                            : recipient.email}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteSavedRecipient(recipient.id)}
+                          disabled={pageState === "sending"}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 保存为常用收件人 */}
+              <div className="mt-4 space-y-2">
+                <label className="text-sm font-medium">保存为常用收件人</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={recipientLabel}
+                    onChange={(e) => setRecipientLabel(e.target.value)}
+                    placeholder="标签（可选）"
+                    disabled={pageState === "sending"}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSaveRecipient}
+                    disabled={!emailValid || pageState === "sending"}
+                  >
+                    保存
+                  </Button>
+                </div>
+                {recipientError && <p className="text-xs text-destructive">{recipientError}</p>}
+              </div>
             </div>
 
             {/* 错误信息 */}
