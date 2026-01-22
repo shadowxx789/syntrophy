@@ -308,7 +308,7 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
   const hasApiKey = !!encryptedApiKey;
 
   return (
-    <div className="safe-area-inset-bottom border-t bg-background p-4">
+    <div className="safe-area-inset-bottom fixed bottom-20 left-0 right-0 z-50 border-t bg-background p-4 sm:static sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto">
       {/* Error Display */}
       {error && (
         <div className="mb-2 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

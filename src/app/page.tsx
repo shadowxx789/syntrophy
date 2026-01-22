@@ -237,7 +237,7 @@ export default function HomePage() {
       <TabNav />
 
       {/* Main Content - add padding bottom for mobile BottomBar */}
-      <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">
+      <main className="flex-1 overflow-y-auto pb-32 sm:pb-0">
         <TaskList onEditTask={handleEditTask} />
       </main>
 
