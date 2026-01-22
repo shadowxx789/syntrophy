@@ -17,11 +17,14 @@ pnpm test                 # Watch mode
 pnpm test:run             # Single run (CI)
 pnpm test src/lib/parseCommand.test.ts       # Single file
 npx vitest run -t "should parse delete"      # Pattern match
+pnpm test:coverage        # Coverage report
 
 # E2E Tests (Playwright)
-pnpm test:e2e             # All E2E tests
+pnpm test:e2e             # All E2E (chromium, firefox, webkit, mobile)
 pnpm test:e2e:ui          # Playwright UI mode
 pnpm test:e2e:headed      # With browser visible
+npx playwright test e2e/app.spec.ts          # Single file
+npx playwright test --project=chromium       # Single browser
 ```
 
 ## Project Structure
@@ -46,6 +49,7 @@ e2e/                      # Playwright E2E tests
 
 - **Strict mode** - No `any`, no `@ts-ignore`, no `@ts-expect-error`
 - ESLint: `@typescript-eslint/no-explicit-any: "error"`
+- ESLint: `@typescript-eslint/no-unused-vars: ["warn", { "argsIgnorePattern": "^_" }]`
 - Path alias: `@/*` → `./src/*`
 - Types in `@/types/index.ts` or `@/types/*.ts`
 
@@ -53,7 +57,7 @@ e2e/                      # Playwright E2E tests
 
 - Double quotes, semicolons, 2-space indent
 - `printWidth: 100`, `trailingComma: "es5"`
-- Tailwind class sorting via plugin
+- Tailwind class sorting via `prettier-plugin-tailwindcss`
 
 ### Import Order
 
@@ -93,7 +97,13 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
   tasks: [],
   isLoading: false,
   loadTasks: async () => {
-    set({ isLoading: true }); /* ... */
+    set({ isLoading: true });
+    try {
+      const tasks = await db.getActiveTasks();
+      set({ tasks, isLoading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "加载失败", isLoading: false });
+    }
   },
 }));
 ```
@@ -110,13 +120,18 @@ try {
 }
 ```
 
-### UI / Styling
+### Comments & JSDoc
 
-- Use shadcn/ui from `@/components/ui/`
-- Tailwind CSS for styling
-- Use `cn()` for conditional classes: `cn("base", condition && "extra")`
-
-### Comments
+```typescript
+/**
+ * 核心任务模型 - 同步就绪版本
+ * 包含所有同步元数据字段
+ */
+export interface SyntropyTask {
+  /** 唯一标识符，格式: SYN-YYYY-XXXX */
+  id: string;
+}
+```
 
 - JSDoc in Chinese for public APIs
 - Inline comments: Chinese or English
@@ -157,29 +172,30 @@ test("should load home page", async ({ page }) => {
 
 ## Key Patterns
 
-1. **Local-first**: IndexedDB (Dexie.js), sync to cloud
+1. **Local-first**: IndexedDB (Dexie.js), sync to cloud later
 2. **Soft delete**: Use `deletedAt` field, never hard delete
-3. **Lamport clock**: Conflict resolution in sync
+3. **Lamport clock**: `version` field for conflict resolution
 4. **5-second undo**: All operations reversible
 5. **PWA ready**: Offline support, installable
 
 ## Tech Stack
 
-| Layer     | Technology               |
-| --------- | ------------------------ |
-| Framework | Next.js 14 (App Router)  |
-| UI        | Tailwind CSS + shadcn/ui |
-| State     | Zustand                  |
-| Storage   | IndexedDB (Dexie.js)     |
-| Auth      | Supabase Auth            |
-| AI        | OpenAI / DeepSeek (BYOK) |
-| Testing   | Vitest + Playwright      |
+| Layer     | Technology                        |
+| --------- | --------------------------------- |
+| Framework | Next.js 14 (App Router)           |
+| UI        | Tailwind CSS + shadcn/ui          |
+| State     | Zustand                           |
+| Storage   | IndexedDB (Dexie.js)              |
+| Auth      | Supabase Auth                     |
+| AI        | OpenAI / DeepSeek / Gemini (BYOK) |
+| Testing   | Vitest + Playwright               |
 
 ## Do Not
 
 - Modify `@/components/ui/*` (shadcn primitives)
-- Use `any` type or `@ts-ignore`
+- Use `any` type, `@ts-ignore`, or `@ts-expect-error`
 - Hard delete data (use `deletedAt`)
 - Commit API keys or secrets
 - Skip error handling in async operations
-- Empty catch blocks
+- Leave empty catch blocks
+- Prefix unused params with `_` to silence warnings (allowed)

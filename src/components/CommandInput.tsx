@@ -62,6 +62,11 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
     const trimmedInput = input.trim();
     if (!trimmedInput || isProcessing) return;
 
+    // 触觉反馈
+    if (navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+
     setIsProcessing(true);
     setError(null);
     setLastParsed(null);
@@ -312,13 +317,14 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
         </div>
       )}
 
-      <div className="relative flex items-center gap-2">
+      <div className="relative flex items-center gap-3">
         {/* AI Toggle - larger touch target on mobile */}
         <Button
           variant={aiEnabled && hasApiKey ? "default" : "outline"}
           size="icon"
           onClick={() => setAiEnabled(!aiEnabled)}
           disabled={!hasApiKey}
+          aria-label={aiEnabled && hasApiKey ? "AI 解析已启用" : "AI 解析已禁用"}
           title={
             hasApiKey
               ? aiEnabled
@@ -343,6 +349,9 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
             aiEnabled && hasApiKey ? "Enter natural language command..." : "Enter task content..."
           }
           disabled={isProcessing}
+          inputMode="text"
+          autoComplete="off"
+          autoCorrect="off"
           className="h-11 flex-1 touch-manipulation text-base sm:h-10 sm:text-sm"
         />
 
