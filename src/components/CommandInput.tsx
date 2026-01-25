@@ -48,9 +48,7 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
 
   const selectedCustomProvider = aiProvider === "custom" ? getSelectedCustomProvider() : undefined;
   const effectiveEncryptedApiKey =
-    aiProvider === "custom"
-      ? selectedCustomProvider?.encryptedApiKey || encryptedApiKey
-      : encryptedApiKey;
+    aiProvider === "custom" ? selectedCustomProvider?.encryptedApiKey : encryptedApiKey;
 
   const UPDATE_KEYWORD_REGEX = /(修改|更新|改成|调整)/;
   const UPDATE_PREFIX_REGEX = /^(完成|做完了?|标记完成|修改|更新|改成|调整)\s*/;
