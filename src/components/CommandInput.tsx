@@ -37,7 +37,20 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
 
   const { tasks, createTask, updateTask, deleteTask } = useTaskStore();
   const { currentProjectId } = useProjectStore();
-  const { aiProvider, encryptedApiKey, customAIConfig, customPrompts } = useSettingsStore();
+  const {
+    aiProvider,
+    encryptedApiKey,
+    customAIConfig,
+    customPrompts,
+    geminiModel,
+    getSelectedCustomProvider,
+  } = useSettingsStore();
+
+  const selectedCustomProvider = aiProvider === "custom" ? getSelectedCustomProvider() : undefined;
+  const effectiveEncryptedApiKey =
+    aiProvider === "custom"
+      ? selectedCustomProvider?.encryptedApiKey || encryptedApiKey
+      : encryptedApiKey;
 
   const UPDATE_KEYWORD_REGEX = /(修改|更新|改成|调整)/;
   const UPDATE_PREFIX_REGEX = /^(完成|做完了?|标记完成|修改|更新|改成|调整)\s*/;
@@ -75,15 +88,17 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
       let parsedCommand: ParsedCommand;
 
       // 检查是否启用 AI 且有 API Key
-      if (aiEnabled && encryptedApiKey) {
+      if (aiEnabled && effectiveEncryptedApiKey) {
         try {
-          const apiKey = await decryptApiKey(encryptedApiKey);
+          const apiKey = await decryptApiKey(effectiveEncryptedApiKey);
           parsedCommand = await parseCommand(
             trimmedInput,
             {
               provider: aiProvider,
               apiKey,
-              customConfig: aiProvider === "custom" ? customAIConfig : undefined,
+              model: aiProvider === "gemini" ? geminiModel : undefined,
+              customConfig:
+                aiProvider === "custom" ? selectedCustomProvider || customAIConfig : undefined,
             },
             // 只传递未删除的任务给 AI
             tasks.filter((t) => !t.deletedAt).map((t) => ({ id: t.id, content: t.content })),
@@ -305,7 +320,7 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
     }
   };
 
-  const hasApiKey = !!encryptedApiKey;
+  const hasApiKey = !!effectiveEncryptedApiKey;
 
   return (
     <div className="safe-area-inset-bottom fixed bottom-20 left-0 right-0 z-50 border-t bg-background p-4 sm:static sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto">
@@ -378,7 +393,8 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
           {aiEnabled && hasApiKey ? (
             <>
               <Sparkles className="mr-1 inline h-3 w-3" />
-              AI parsing enabled ({getProviderDisplayName(aiProvider, customAIConfig)})
+              AI parsing enabled (
+              {getProviderDisplayName(aiProvider, selectedCustomProvider || customAIConfig)})
             </>
           ) : hasApiKey ? (
             "AI parsing disabled, click the button to enable"
