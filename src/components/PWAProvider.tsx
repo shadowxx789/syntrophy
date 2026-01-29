@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { registerSW, isPWAInstalled, isOnline } from "@/lib/registerSW";
 import { setupOfflineSync } from "@/lib/offlineQueue";
 import { AuthBootstrap } from "@/components/AuthBootstrap";
+import { AuthRouteGate } from "@/components/AuthRouteGate";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { InstallPrompt } from "./InstallPrompt";
 import { SWUpdateToast } from "./SWUpdateToast";
@@ -71,7 +72,7 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
   return (
     <div data-offline={isOffline} data-update-available={updateAvailable} className="contents">
       <AuthBootstrap />
-      {children}
+      <AuthRouteGate>{children}</AuthRouteGate>
       <OfflineIndicator />
       <InstallPrompt />
       <SWUpdateToast
