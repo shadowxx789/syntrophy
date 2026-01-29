@@ -25,7 +25,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { SyncIndicator } from "@/components/SyncIndicator";
 import { backupAllToCloud, fullRestore, getSyncStatus } from "@/lib/syncService";
 import { ArrowLeft, User, Mail, LogOut, RefreshCw, Download, Loader2, Trash2 } from "lucide-react";
-import { db } from "@/lib/db";
+import { db, DEFAULT_PROJECT_ID } from "@/lib/db";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -104,10 +104,43 @@ export default function ProfilePage() {
 
   const handleClearLocalData = async () => {
     try {
-      await db.tasks.clear();
-      await db.projects.clear();
+      const now = new Date().toISOString();
+
+      await db.transaction("rw", [db.tasks, db.projects], async () => {
+        const tasks = await db.tasks.toArray();
+        if (tasks.length > 0) {
+          await db.tasks.bulkPut(
+            tasks.map((task) => ({
+              ...task,
+              deletedAt: now,
+              updatedAt: now,
+              version: task.version + 1,
+            }))
+          );
+        }
+
+        const projects = await db.projects.toArray();
+        if (projects.length > 0) {
+          await db.projects.bulkPut(
+            projects.map((project) => {
+              if (project.id === DEFAULT_PROJECT_ID) {
+                return project;
+              }
+
+              return {
+                ...project,
+                isArchived: true,
+                deletedAt: now,
+                updatedAt: now,
+                version: project.version + 1,
+              };
+            })
+          );
+        }
+      });
+
       setShowClearConfirm(false);
-      setMessage({ type: "success", text: "本地数据已清除" });
+      setMessage({ type: "success", text: "本地数据已清除（建议立即备份以同步到云端）" });
     } catch {
       setMessage({ type: "error", text: "清除失败，请重试" });
     }

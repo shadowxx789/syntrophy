@@ -11,11 +11,25 @@ vi.mock("@/components/SyncIndicator", () => ({
   SyncIndicator: () => <div data-testid="sync-indicator" />,
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    tasks: { clear: vi.fn() },
-    projects: { clear: vi.fn() },
+const mockDb = vi.hoisted(() => ({
+  tasks: {
+    clear: vi.fn(async () => undefined),
+    toArray: vi.fn(async () => [] as unknown[]),
+    bulkPut: vi.fn(async (_items: unknown[]) => undefined),
   },
+  projects: {
+    clear: vi.fn(async () => undefined),
+    toArray: vi.fn(async () => [] as unknown[]),
+    bulkPut: vi.fn(async (_items: unknown[]) => undefined),
+  },
+  transaction: vi.fn(async (_mode: "rw", _tables: unknown[], callback: () => Promise<void>) => {
+    await callback();
+  }),
+}));
+
+vi.mock("@/lib/db", () => ({
+  db: mockDb,
+  DEFAULT_PROJECT_ID: "PROJ-0001",
 }));
 
 vi.mock("@/lib/syncService", () => ({
@@ -85,5 +99,48 @@ describe("ProfilePage", () => {
     await user.click(screen.getByRole("button", { name: "确认恢复" }));
 
     expect(fullRestore).toHaveBeenCalledWith("user-123");
+  });
+
+  it("soft-deletes local data instead of hard clearing tables", async () => {
+    const user = userEvent.setup();
+
+    mockDb.tasks.toArray.mockResolvedValue([
+      {
+        id: "SYN-2026-0001",
+        projectId: "PROJ-0001",
+        content: "Task",
+        status: "pending",
+        version: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        createdBy: "DEV-11111111",
+        updatedBy: "DEV-11111111",
+      },
+    ] as unknown[]);
+    mockDb.projects.toArray.mockResolvedValue([
+      {
+        id: "PROJ-0001",
+        name: "Default",
+        displayOrder: 0,
+        isArchived: false,
+        version: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        createdBy: "DEV-11111111",
+        updatedBy: "DEV-11111111",
+      },
+    ] as unknown[]);
+
+    render(<ProfilePage />);
+
+    await user.click(screen.getByRole("button", { name: "清除本地数据" }));
+    await user.click(screen.getByRole("button", { name: "确认清除" }));
+
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(mockDb.tasks.clear).not.toHaveBeenCalled();
+    expect(mockDb.projects.clear).not.toHaveBeenCalled();
+    expect(mockDb.tasks.bulkPut).toHaveBeenCalledTimes(1);
+    expect(mockDb.projects.bulkPut).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/本地数据已清除/)).toBeInTheDocument();
   });
 });
