@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { User } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
-import { backupToCloud, fullRestore } from "@/lib/syncService";
+import { backupAllToCloud, fullRestore } from "@/lib/syncService";
 
 import ProfilePage from "./page";
 
@@ -21,6 +21,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/syncService", () => ({
   performSync: vi.fn(),
   backupToCloud: vi.fn(),
+  backupAllToCloud: vi.fn(),
   fullRestore: vi.fn(),
   getSyncStatus: vi.fn(() => ({
     state: "idle",
@@ -53,7 +54,7 @@ describe("ProfilePage", () => {
   it("triggers a cloud backup when user clicks backup", async () => {
     const user = userEvent.setup();
 
-    vi.mocked(backupToCloud).mockResolvedValue({
+    vi.mocked(backupAllToCloud).mockResolvedValue({
       success: true,
       uploaded: { tasks: 1, projects: 2 },
       errors: [],
@@ -63,7 +64,7 @@ describe("ProfilePage", () => {
 
     await user.click(screen.getByRole("button", { name: "立即备份" }));
 
-    expect(backupToCloud).toHaveBeenCalledWith("user-123");
+    expect(backupAllToCloud).toHaveBeenCalledWith("user-123");
     expect(screen.getByText(/备份完成/)).toBeInTheDocument();
   });
 

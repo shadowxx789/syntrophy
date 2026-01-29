@@ -38,6 +38,8 @@ export interface BackupResult {
   errors: SyncError[];
 }
 
+type BackupMode = "incremental" | "full";
+
 export interface ConflictItem {
   entityType: "task" | "project";
   entityId: string;
@@ -219,7 +221,7 @@ export async function performSync(userId: string): Promise<SyncResult> {
 
   try {
     // Step 1: Push local changes to cloud
-    const pushResult = await pushChanges(userId);
+    const pushResult = await pushChanges(userId, "incremental");
     result.uploaded = pushResult.uploaded;
     result.errors.push(...pushResult.errors);
 
@@ -280,7 +282,65 @@ export async function backupToCloud(userId: string): Promise<BackupResult> {
   };
 
   try {
-    const pushResult = await pushChanges(userId);
+    const pushResult = await pushChanges(userId, "incremental");
+    result.uploaded = pushResult.uploaded;
+    result.errors.push(...pushResult.errors);
+
+    await updateSyncMetadata();
+
+    syncStatus.state = "idle";
+    syncStatus.lastSyncAt = new Date();
+    syncStatus.pendingChanges = 0;
+
+    result.success = result.errors.length === 0;
+  } catch (error) {
+    result.success = false;
+    syncStatus.state = "error";
+    syncStatus.error = error instanceof Error ? error.message : "Unknown backup error";
+    result.errors.push({
+      entityType: "task",
+      entityId: "",
+      error: syncStatus.error,
+    });
+  }
+
+  notifyListeners();
+  return result;
+}
+
+/**
+ * Manual backup: upload ALL local rows to cloud (push-only)
+ *
+ * This avoids confusion where an incremental backup uploads 0 rows.
+ */
+export async function backupAllToCloud(userId: string): Promise<BackupResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: true,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [],
+    };
+  }
+
+  if (!syncStatus.isOnline) {
+    return {
+      success: false,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [{ entityType: "task", entityId: "", error: "Offline" }],
+    };
+  }
+
+  syncStatus.state = "syncing";
+  notifyListeners();
+
+  const result: BackupResult = {
+    success: true,
+    uploaded: { tasks: 0, projects: 0 },
+    errors: [],
+  };
+
+  try {
+    const pushResult = await pushChanges(userId, "full");
     result.uploaded = pushResult.uploaded;
     result.errors.push(...pushResult.errors);
 
@@ -310,26 +370,33 @@ export async function backupToCloud(userId: string): Promise<BackupResult> {
  * Push local changes to Supabase
  */
 async function pushChanges(
-  userId: string
+  userId: string,
+  mode: BackupMode
 ): Promise<{ uploaded: { tasks: number; projects: number }; errors: SyncError[] }> {
   const supabase = getSupabaseClient();
   const deviceId = getDeviceId();
   const errors: SyncError[] = [];
   const uploaded = { tasks: 0, projects: 0 };
 
-  // Get last sync time
-  const syncMeta = await db.syncMetadata.get(deviceId);
-  const lastSyncAt = syncMeta?.lastSyncAt ? new Date(syncMeta.lastSyncAt) : new Date(0);
+  let localTasks: SyntropyTask[];
+  let localProjects: SyntropyProject[];
 
-  // Get locally modified tasks
-  const localTasks = await db.tasks
-    .filter((task) => new Date(task.updatedAt) > lastSyncAt)
-    .toArray();
+  if (mode === "full") {
+    localTasks = await db.tasks.toArray();
+    localProjects = await db.projects.toArray();
+  } else {
+    // Get last sync time
+    const syncMeta = await db.syncMetadata.get(deviceId);
+    const lastSyncAt = syncMeta?.lastSyncAt ? new Date(syncMeta.lastSyncAt) : new Date(0);
 
-  // Get locally modified projects
-  const localProjects = await db.projects
-    .filter((project) => new Date(project.updatedAt) > lastSyncAt)
-    .toArray();
+    // Get locally modified tasks
+    localTasks = await db.tasks.filter((task) => new Date(task.updatedAt) > lastSyncAt).toArray();
+
+    // Get locally modified projects
+    localProjects = await db.projects
+      .filter((project) => new Date(project.updatedAt) > lastSyncAt)
+      .toArray();
+  }
 
   // Upsert tasks to Supabase
   let useLegacySchema = false;

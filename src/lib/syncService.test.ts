@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SyncMetadata, SyntropyProject, SyntropyTask } from "@/types";
 import * as supabaseClient from "./supabaseClient";
-import { backupToCloud, fullRestore } from "./syncService";
+import { backupAllToCloud, backupToCloud, fullRestore } from "./syncService";
 import { db } from "./db";
 
 type TableMock<T extends { id: string }> = {
@@ -10,6 +10,7 @@ type TableMock<T extends { id: string }> = {
   bulkPut: ReturnType<typeof vi.fn>;
   put: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
+  toArray: () => Promise<T[]>;
   filter: (predicate: (item: T) => boolean) => { toArray: () => Promise<T[]> };
 };
 
@@ -61,6 +62,7 @@ const mockDbState = vi.hoisted(() => {
         }
       }),
       get: vi.fn(async (id: string) => table.data.find((entry) => entry.id === id)),
+      toArray: async () => table.data,
       filter: (predicate: (item: T) => boolean) => ({
         toArray: async () => table.data.filter(predicate),
       }),
@@ -243,6 +245,47 @@ describe("backupToCloud", () => {
     expect(result.uploaded).toEqual({ tasks: 0, projects: 0 });
     expect(result.errors).toEqual([]);
     expect(mockedSupabaseClient.getSupabaseClient).not.toHaveBeenCalled();
+  });
+});
+
+describe("backupAllToCloud", () => {
+  it("uploads all local rows regardless lastSyncAt", async () => {
+    const supabaseMock = createSupabaseMock();
+    mockedSupabaseClient.getSupabaseClient.mockReturnValue(
+      supabaseMock as unknown as ReturnType<typeof supabaseClient.getSupabaseClient>
+    );
+
+    // Force a stable device id so we can set sync metadata.
+    const storage = globalThis.localStorage as unknown as {
+      getItem: ReturnType<typeof vi.fn>;
+      setItem: ReturnType<typeof vi.fn>;
+    };
+    storage.getItem.mockImplementation((key: string) =>
+      key === "syntropy_device_id" ? "device-fixed" : null
+    );
+
+    const tasksTable = db.tasks as unknown as TableMock<SyntropyTask>;
+    const projectsTable = db.projects as unknown as TableMock<SyntropyProject>;
+
+    // These rows are "older" than lastSyncAt and would be skipped by incremental backup.
+    tasksTable.data = [baseTask({ id: "SYN-2026-0002", updatedAt: "2026-01-01T00:00:00.000Z" })];
+    projectsTable.data = [baseProject({ id: "PROJ-0002", updatedAt: "2026-01-01T00:00:00.000Z" })];
+
+    const syncMetadataTable = db.syncMetadata as unknown as {
+      data: Map<string, SyncMetadata>;
+    };
+    syncMetadataTable.data.set("device-fixed", {
+      deviceId: "device-fixed",
+      lastSyncAt: "2026-02-01T00:00:00.000Z",
+      lamportClock: 1,
+    });
+
+    const result = await backupAllToCloud("user-123");
+
+    expect(result.success).toBe(true);
+    expect(result.uploaded.tasks).toBe(1);
+    expect(result.uploaded.projects).toBe(1);
+    expect(supabaseMock.calls.upsert.length).toBe(2);
   });
 });
 

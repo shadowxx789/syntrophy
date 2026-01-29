@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { SyncIndicator } from "@/components/SyncIndicator";
-import { backupToCloud, fullRestore, getSyncStatus } from "@/lib/syncService";
+import { backupAllToCloud, fullRestore, getSyncStatus } from "@/lib/syncService";
 import { ArrowLeft, User, Mail, LogOut, RefreshCw, Download, Loader2, Trash2 } from "lucide-react";
 import { db } from "@/lib/db";
 
@@ -61,7 +61,7 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
-      const result = await backupToCloud(user.id);
+      const result = await backupAllToCloud(user.id);
 
       if (result.success) {
         setMessage({
