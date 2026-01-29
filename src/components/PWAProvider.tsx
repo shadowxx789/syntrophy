@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { registerSW, isPWAInstalled, isOnline } from "@/lib/registerSW";
 import { setupOfflineSync } from "@/lib/offlineQueue";
+import { AuthBootstrap } from "@/components/AuthBootstrap";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { InstallPrompt } from "./InstallPrompt";
 import { SWUpdateToast } from "./SWUpdateToast";
@@ -69,6 +70,7 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
   // Expose context values via data attributes for components that need them
   return (
     <div data-offline={isOffline} data-update-available={updateAvailable} className="contents">
+      <AuthBootstrap />
       {children}
       <OfflineIndicator />
       <InstallPrompt />

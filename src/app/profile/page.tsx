@@ -10,9 +10,20 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { SyncIndicator } from "@/components/SyncIndicator";
-import { performSync, fullRestore, getSyncStatus } from "@/lib/syncService";
+import { backupToCloud, fullRestore, getSyncStatus } from "@/lib/syncService";
 import { ArrowLeft, User, Mail, LogOut, RefreshCw, Download, Loader2, Trash2 } from "lucide-react";
 import { db } from "@/lib/db";
 
@@ -43,25 +54,25 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSync = async () => {
+  const handleBackup = async () => {
     if (!user) return;
 
     setIsSyncing(true);
     setMessage(null);
 
     try {
-      const result = await performSync(user.id);
+      const result = await backupToCloud(user.id);
 
       if (result.success) {
         setMessage({
           type: "success",
-          text: `同步完成：上传 ${result.uploaded.tasks} 个任务，下载 ${result.downloaded.tasks} 个任务`,
+          text: `备份完成：已上传 ${result.uploaded.tasks} 个任务，${result.uploaded.projects} 个项目`,
         });
       } else {
-        setMessage({ type: "error", text: "同步失败，请重试" });
+        setMessage({ type: "error", text: "备份失败，请重试" });
       }
     } catch {
-      setMessage({ type: "error", text: "同步失败，请检查网络连接" });
+      setMessage({ type: "error", text: "备份失败，请检查网络连接" });
     } finally {
       setIsSyncing(false);
     }
@@ -161,21 +172,21 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Sync Section */}
+        {/* Backup Section */}
         <div className="rounded-2xl bg-slate-800/50 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-white">数据同步</h2>
+          <h2 className="mb-4 text-lg font-semibold text-white">云端备份</h2>
 
           <div className="space-y-3">
-            {/* Sync Status */}
+            {/* Backup Status */}
             <div className="flex items-center justify-between rounded-lg bg-slate-700/30 p-3">
-              <span className="text-sm text-slate-300">同步状态</span>
+              <span className="text-sm text-slate-300">备份状态</span>
               <SyncIndicator showLabel />
             </div>
 
-            {/* Last Sync */}
+            {/* Last Backup */}
             {syncStatus.lastSyncAt && (
               <div className="flex items-center justify-between rounded-lg bg-slate-700/30 p-3">
-                <span className="text-sm text-slate-300">上次同步</span>
+                <span className="text-sm text-slate-300">上次备份</span>
                 <span className="text-sm text-slate-400">
                   {syncStatus.lastSyncAt.toLocaleString("zh-CN")}
                 </span>
@@ -185,7 +196,7 @@ export default function ProfilePage() {
             {/* Sync Buttons */}
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Button
-                onClick={handleSync}
+                onClick={handleBackup}
                 disabled={isSyncing || isRestoring}
                 variant="outline"
                 className="h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
@@ -195,21 +206,43 @@ export default function ProfilePage() {
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
-                立即同步
+                立即备份
               </Button>
-              <Button
-                onClick={handleRestore}
-                disabled={isSyncing || isRestoring}
-                variant="outline"
-                className="h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
-              >
-                {isRestoring ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" />
-                )}
-                恢复数据
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    disabled={isSyncing || isRestoring}
+                    variant="outline"
+                    className="h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    {isRestoring ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    恢复数据
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>恢复云端数据</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      此操作会清空并覆盖本地数据，然后从云端下载项目与任务。请确认你已经完成过云端备份。
+                      如果云端没有数据，本地也会被清空。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isRestoring}>取消</AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={isRestoring}
+                      className="bg-red-600 text-white hover:bg-red-700"
+                      onClick={handleRestore}
+                    >
+                      确认恢复
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </div>

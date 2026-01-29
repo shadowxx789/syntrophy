@@ -32,6 +32,12 @@ export interface SyncResult {
   errors: SyncError[];
 }
 
+export interface BackupResult {
+  success: boolean;
+  uploaded: { tasks: number; projects: number };
+  errors: SyncError[];
+}
+
 export interface ConflictItem {
   entityType: "task" | "project";
   entityId: string;
@@ -233,6 +239,62 @@ export async function performSync(userId: string): Promise<SyncResult> {
     result.success = false;
     syncStatus.state = "error";
     syncStatus.error = error instanceof Error ? error.message : "Unknown sync error";
+    result.errors.push({
+      entityType: "task",
+      entityId: "",
+      error: syncStatus.error,
+    });
+  }
+
+  notifyListeners();
+  return result;
+}
+
+/**
+ * Backup local data to cloud (push-only)
+ */
+export async function backupToCloud(userId: string): Promise<BackupResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: true,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [],
+    };
+  }
+
+  if (!syncStatus.isOnline) {
+    return {
+      success: false,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [{ entityType: "task", entityId: "", error: "Offline" }],
+    };
+  }
+
+  syncStatus.state = "syncing";
+  notifyListeners();
+
+  const result: BackupResult = {
+    success: true,
+    uploaded: { tasks: 0, projects: 0 },
+    errors: [],
+  };
+
+  try {
+    const pushResult = await pushChanges(userId);
+    result.uploaded = pushResult.uploaded;
+    result.errors.push(...pushResult.errors);
+
+    await updateSyncMetadata();
+
+    syncStatus.state = "idle";
+    syncStatus.lastSyncAt = new Date();
+    syncStatus.pendingChanges = 0;
+
+    result.success = result.errors.length === 0;
+  } catch (error) {
+    result.success = false;
+    syncStatus.state = "error";
+    syncStatus.error = error instanceof Error ? error.message : "Unknown backup error";
     result.errors.push({
       entityType: "task",
       entityId: "",
@@ -479,9 +541,7 @@ function mapRemoteTaskToLocal(remote: RemoteTask): SyntropyTask {
   };
 }
 
-function normalizeRemoteStatus(
-  status: RemoteTask["status"]
-): SyntropyTask["status"] {
+function normalizeRemoteStatus(status: RemoteTask["status"]): SyntropyTask["status"] {
   if (status === "todo") return "pending";
   if (status === "done") return "completed";
   if (status === "pending") return "pending";
@@ -622,11 +682,17 @@ export async function fullRestore(userId: string): Promise<{
       projects: (projects as unknown[] | null)?.length || 0,
     };
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : error && typeof error === "object" && "message" in error
+          ? String((error as { message?: unknown }).message ?? "Restore failed")
+          : "Restore failed";
     return {
       success: false,
       tasks: 0,
       projects: 0,
-      error: error instanceof Error ? error.message : "Restore failed",
+      error: message,
     };
   }
 }
