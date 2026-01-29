@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Download, Upload, Mail, Settings, Zap } from "lucide-react";
+import { Download, Upload, Mail, Settings, User, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { TabNav } from "@/components/TabNav";
 import { TaskList } from "@/components/TaskList";
 import { CommandInput } from "@/components/CommandInput";
@@ -27,6 +28,7 @@ export default function HomePage() {
   const { tasks, loadTasks } = useTaskStore();
   const { projects, currentProjectId, loadProjects, initializeDefaultProject } = useProjectStore();
   const { initialize: initSettings } = useSettingsStore();
+  const user = useAuthStore((state) => state.user);
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -229,6 +231,17 @@ export default function HomePage() {
             aria-label="设置"
           >
             <Settings className="h-5 w-5" />
+          </Button>
+
+          {/* Profile/Login Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push(user ? "/profile" : "/auth/login")}
+            className="h-10 w-10 touch-manipulation"
+            aria-label={user ? "个人资料" : "登录"}
+          >
+            <User className="h-5 w-5" />
           </Button>
         </div>
       </header>
