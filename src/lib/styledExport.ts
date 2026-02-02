@@ -25,6 +25,20 @@ const STATUS_DISPLAY: Record<string, string> = {
   delayed: "⚠ 滞后",
 };
 
+/**
+ * Format ISO date time to localized string
+ */
+function formatDateTime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 const MAX_SHEET_NAME_LENGTH = 31;
 const INVALID_SHEET_NAME_REGEX = /[\\/?*:[\]]/g;
 

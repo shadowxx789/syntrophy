@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useSettingsStore } from "./useSettingsStore";
-import type { CustomProviderExport } from "@/types";
+import type { SavedCustomProvider, CustomProviderExport } from "@/types";
 
 // Mock localStorage
 const localStorageMock = (() => {

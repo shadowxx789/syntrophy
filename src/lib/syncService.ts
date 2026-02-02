@@ -32,6 +32,14 @@ export interface SyncResult {
   errors: SyncError[];
 }
 
+export interface BackupResult {
+  success: boolean;
+  uploaded: { tasks: number; projects: number };
+  errors: SyncError[];
+}
+
+type BackupMode = "incremental" | "full";
+
 export interface ConflictItem {
   entityType: "task" | "project";
   entityId: string;
@@ -44,12 +52,6 @@ export interface SyncError {
   entityType: "task" | "project";
   entityId: string;
   error: string;
-}
-
-export interface BackupResult {
-  success: boolean;
-  uploaded: { tasks: number; projects: number };
-  errors: SyncError[];
 }
 
 // Remote data types from Supabase
@@ -219,7 +221,7 @@ export async function performSync(userId: string): Promise<SyncResult> {
 
   try {
     // Step 1: Push local changes to cloud
-    const pushResult = await pushChanges(userId);
+    const pushResult = await pushChanges(userId, "incremental");
     result.uploaded = pushResult.uploaded;
     result.errors.push(...pushResult.errors);
 
@@ -250,131 +252,151 @@ export async function performSync(userId: string): Promise<SyncResult> {
   return result;
 }
 
-// ============================================
-// Backup Helpers (Push Only)
-// ============================================
-
+/**
+ * Backup local data to cloud (push-only)
+ */
 export async function backupToCloud(userId: string): Promise<BackupResult> {
   if (!isSupabaseConfigured()) {
-    return { success: true, uploaded: { tasks: 0, projects: 0 }, errors: [] };
+    return {
+      success: true,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [],
+    };
   }
 
-  const result = await pushChanges(userId);
-  return {
-    success: result.errors.length === 0,
-    uploaded: result.uploaded,
-    errors: result.errors,
+  if (!syncStatus.isOnline) {
+    return {
+      success: false,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [{ entityType: "task", entityId: "", error: "Offline" }],
+    };
+  }
+
+  syncStatus.state = "syncing";
+  notifyListeners();
+
+  const result: BackupResult = {
+    success: true,
+    uploaded: { tasks: 0, projects: 0 },
+    errors: [],
   };
+
+  try {
+    const pushResult = await pushChanges(userId, "incremental");
+    result.uploaded = pushResult.uploaded;
+    result.errors.push(...pushResult.errors);
+
+    await updateSyncMetadata();
+
+    syncStatus.state = "idle";
+    syncStatus.lastSyncAt = new Date();
+    syncStatus.pendingChanges = 0;
+
+    result.success = result.errors.length === 0;
+  } catch (error) {
+    result.success = false;
+    syncStatus.state = "error";
+    syncStatus.error = error instanceof Error ? error.message : "Unknown backup error";
+    result.errors.push({
+      entityType: "task",
+      entityId: "",
+      error: syncStatus.error,
+    });
+  }
+
+  notifyListeners();
+  return result;
 }
 
+/**
+ * Manual backup: upload ALL local rows to cloud (push-only)
+ *
+ * This avoids confusion where an incremental backup uploads 0 rows.
+ */
 export async function backupAllToCloud(userId: string): Promise<BackupResult> {
   if (!isSupabaseConfigured()) {
-    return { success: true, uploaded: { tasks: 0, projects: 0 }, errors: [] };
+    return {
+      success: true,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [],
+    };
   }
 
-  const supabase = getSupabaseClient();
-  const errors: SyncError[] = [];
-  const uploaded = { tasks: 0, projects: 0 };
-
-  const [localTasks, localProjects] = await Promise.all([
-    db.tasks.toArray(),
-    db.projects.toArray(),
-  ]);
-
-  let useLegacySchema = false;
-
-  for (const task of localTasks) {
-    try {
-      const taskData = useLegacySchema
-        ? buildLegacyTaskPayload(task, userId)
-        : buildExtendedTaskPayload(task, userId);
-
-      const { error } = await supabase
-        .from("tasks")
-        .upsert(taskData as never, { onConflict: "id,user_id" });
-
-      if (error) {
-        if (!useLegacySchema && isMissingColumnError(error)) {
-          useLegacySchema = true;
-          const fallbackData = buildLegacyTaskPayload(task, userId);
-          const { error: fallbackError } = await supabase
-            .from("tasks")
-            .upsert(fallbackData as never, { onConflict: "id,user_id" });
-          if (fallbackError) throw fallbackError;
-        } else {
-          throw error;
-        }
-      }
-      uploaded.tasks++;
-    } catch (error) {
-      errors.push({
-        entityType: "task",
-        entityId: task.id,
-        error: error instanceof Error ? error.message : "Upload failed",
-      });
-    }
+  if (!syncStatus.isOnline) {
+    return {
+      success: false,
+      uploaded: { tasks: 0, projects: 0 },
+      errors: [{ entityType: "task", entityId: "", error: "Offline" }],
+    };
   }
 
-  for (const project of localProjects) {
-    try {
-      const projectData = {
-        id: project.id,
-        user_id: userId,
-        name: project.name,
-        display_order: project.displayOrder,
-        color: project.color || null,
-        is_archived: project.isArchived,
-        created_at: project.createdAt,
-        updated_at: project.updatedAt,
-        deleted_at: project.deletedAt || null,
-      };
+  syncStatus.state = "syncing";
+  notifyListeners();
 
-      const { error } = await supabase
-        .from("projects")
-        .upsert(projectData as never, { onConflict: "id,user_id" });
-
-      if (error) throw error;
-      uploaded.projects++;
-    } catch (error) {
-      errors.push({
-        entityType: "project",
-        entityId: project.id,
-        error: error instanceof Error ? error.message : "Upload failed",
-      });
-    }
-  }
-
-  return {
-    success: errors.length === 0,
-    uploaded,
-    errors,
+  const result: BackupResult = {
+    success: true,
+    uploaded: { tasks: 0, projects: 0 },
+    errors: [],
   };
+
+  try {
+    const pushResult = await pushChanges(userId, "full");
+    result.uploaded = pushResult.uploaded;
+    result.errors.push(...pushResult.errors);
+
+    await updateSyncMetadata();
+
+    syncStatus.state = "idle";
+    syncStatus.lastSyncAt = new Date();
+    syncStatus.pendingChanges = 0;
+
+    result.success = result.errors.length === 0;
+  } catch (error) {
+    result.success = false;
+    syncStatus.state = "error";
+    syncStatus.error = error instanceof Error ? error.message : "Unknown backup error";
+    result.errors.push({
+      entityType: "task",
+      entityId: "",
+      error: syncStatus.error,
+    });
+  }
+
+  notifyListeners();
+  return result;
 }
 
 /**
  * Push local changes to Supabase
  */
 async function pushChanges(
-  userId: string
+  userId: string,
+  mode: BackupMode
 ): Promise<{ uploaded: { tasks: number; projects: number }; errors: SyncError[] }> {
   const supabase = getSupabaseClient();
   const deviceId = getDeviceId();
   const errors: SyncError[] = [];
   const uploaded = { tasks: 0, projects: 0 };
 
-  // Get last sync time
-  const syncMeta = await db.syncMetadata.get(deviceId);
-  const lastSyncAt = syncMeta?.lastSyncAt ? new Date(syncMeta.lastSyncAt) : new Date(0);
+  let localTasks: SyntropyTask[];
+  let localProjects: SyntropyProject[];
 
-  // Get locally modified tasks
-  const localTasks = await db.tasks
-    .filter((task) => new Date(task.updatedAt) > lastSyncAt)
-    .toArray();
+  if (mode === "full") {
+    localTasks = await db.tasks.toArray();
+    localProjects = await db.projects.toArray();
+  } else {
+    // Get last sync time
+    const syncMeta = await db.syncMetadata.get(deviceId);
+    const lastSyncAt = syncMeta?.lastSyncAt ? new Date(syncMeta.lastSyncAt) : new Date(0);
 
-  // Get locally modified projects
-  const localProjects = await db.projects
-    .filter((project) => new Date(project.updatedAt) > lastSyncAt)
-    .toArray();
+    // Get locally modified tasks
+    localTasks = await db.tasks.filter((task) => new Date(task.updatedAt) > lastSyncAt).toArray();
+
+    // Get locally modified projects
+    localProjects = await db.projects
+      .filter((project) => new Date(project.updatedAt) > lastSyncAt)
+      .toArray();
+  }
 
   // Upsert tasks to Supabase
   let useLegacySchema = false;
@@ -727,22 +749,17 @@ export async function fullRestore(userId: string): Promise<{
       projects: (projects as unknown[] | null)?.length || 0,
     };
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : error && typeof error === "object" && "message" in error
+          ? String((error as { message?: unknown }).message ?? "Restore failed")
+          : "Restore failed";
     return {
       success: false,
       tasks: 0,
       projects: 0,
-      error: getErrorMessage(error, "Restore failed"),
+      error: message,
     };
   }
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
-  }
-  return fallback;
 }

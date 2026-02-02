@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Download, Upload, Mail, Settings, Zap } from "lucide-react";
+import { Download, Upload, Mail, Settings, User, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTaskStore } from "@/stores/useTaskStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { TabNav } from "@/components/TabNav";
 import { TaskList } from "@/components/TaskList";
 import { CommandInput } from "@/components/CommandInput";
@@ -14,6 +15,7 @@ import { ImportModal } from "@/components/ImportModal";
 import { EmailModal } from "@/components/EmailModal";
 import { ExportModal } from "@/components/ExportModal";
 import { UndoToast } from "@/components/UndoToast";
+import { BottomBar } from "@/components/BottomBar";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { exportStyledExcelForProjects } from "@/lib/styledExport";
@@ -26,6 +28,7 @@ export default function HomePage() {
   const { tasks, loadTasks } = useTaskStore();
   const { projects, currentProjectId, loadProjects, initializeDefaultProject } = useProjectStore();
   const { initialize: initSettings } = useSettingsStore();
+  const user = useAuthStore((state) => state.user);
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -174,38 +177,71 @@ export default function HomePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Export Button */}
-          <Button variant="outline" size="sm" onClick={handleExport}>
+          {/* Desktop: Show all action buttons */}
+          {/* Export Button - hidden on mobile */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            className="hidden sm:inline-flex"
+          >
             <Download className="mr-1 h-4 w-4" />
             导出
           </Button>
 
-          {/* Email Button */}
-          <Button variant="outline" size="sm" onClick={() => setEmailModalOpen(true)}>
+          {/* Email Button - hidden on mobile */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEmailModalOpen(true)}
+            className="hidden sm:inline-flex"
+          >
             <Mail className="mr-1 h-4 w-4" />
             发送
           </Button>
 
-          {/* Import Button */}
-          <Button variant="outline" size="sm" onClick={() => setImportModalOpen(true)}>
+          {/* Import Button - hidden on mobile */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportModalOpen(true)}
+            className="hidden sm:inline-flex"
+          >
             <Upload className="mr-1 h-4 w-4" />
             导入
           </Button>
 
-          {/* Quick Mode Button */}
+          {/* Quick Mode Button - hidden on mobile */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => router.push("/quick")}
-            className="border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
+            className="hidden border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50 sm:inline-flex"
           >
             <Zap className="mr-1 h-4 w-4" />
             闪电
           </Button>
 
-          {/* Settings Button */}
-          <Button variant="ghost" size="icon" onClick={() => router.push("/settings")}>
+          {/* Settings Button - always visible */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/settings")}
+            className="h-10 w-10 touch-manipulation"
+            aria-label="设置"
+          >
             <Settings className="h-5 w-5" />
+          </Button>
+
+          {/* Profile/Login Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push(user ? "/profile" : "/auth/login")}
+            className="h-10 w-10 touch-manipulation"
+            aria-label={user ? "个人资料" : "登录"}
+          >
+            <User className="h-5 w-5" />
           </Button>
         </div>
       </header>
@@ -213,8 +249,8 @@ export default function HomePage() {
       {/* Tab Navigation */}
       <TabNav />
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      {/* Main Content - add padding bottom for mobile BottomBar */}
+      <main className="flex-1 overflow-y-auto pb-32 sm:pb-0">
         <TaskList onEditTask={handleEditTask} />
       </main>
 
@@ -263,6 +299,14 @@ export default function HomePage() {
         onUndo={handleUndo}
         onClose={clearPending}
         duration={5}
+      />
+
+      {/* Mobile Bottom Bar */}
+      <BottomBar
+        onExport={handleExport}
+        onImport={() => setImportModalOpen(true)}
+        onEmail={() => setEmailModalOpen(true)}
+        onQuickMode={() => router.push("/quick")}
       />
 
       {/* Toast Container */}

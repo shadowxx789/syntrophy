@@ -1,140 +1,140 @@
 # AGENTS.md - Syntropy (凝序)
 
-> PWA office system | Next.js 14 + TypeScript + Tailwind CSS + shadcn/ui
+> PWA office system | Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui
+
+This file is for agentic coding tools working in this repo. Keep changes small, match existing patterns, and favor correctness over refactors.
 
 ## Commands
 
+Notes: `package-lock.json` exists and `playwright.config.ts` uses `npm run dev`, so examples use `npm`. Scripts are package-manager agnostic; `pnpm run <script>` usually works too.
+
 ```bash
-# Package manager: pnpm (required)
-pnpm install              # Install dependencies
-pnpm dev                  # Dev server (localhost:3000)
-pnpm build                # Production build
-pnpm lint                 # ESLint check
-pnpm format               # Prettier format
-
-# Unit Tests (Vitest)
-pnpm test                 # Watch mode
-pnpm test:run             # Single run (CI)
-pnpm test src/lib/parseCommand.test.ts       # Single file
-npx vitest run -t "should parse delete"      # Pattern match
-pnpm test:coverage        # Coverage report
-
-# E2E Tests (Playwright)
-pnpm test:e2e             # All E2E (chromium, firefox, webkit, mobile)
-pnpm test:e2e:ui          # Playwright UI mode
-pnpm test:e2e:headed      # With browser visible
-npx playwright test e2e/app.spec.ts          # Single file
-npx playwright test --project=chromium       # Single browser
+# Install
+npm install
+# Dev / build
+npm run dev
+npm run build
+npm run start
+# Lint / format
+npm run lint
+npm run format
+# Unit tests (Vitest)
+npm run test                 # Watch mode
+npm run test:run             # Single run (CI)
+npm run test:ui              # Vitest UI
+npm run test:coverage
+# Single unit test
+npm run test -- src/lib/parseCommand.test.ts
+npm run test:run -- -t "should parse delete"
+# E2E tests (Playwright)
+npm run test:e2e
+npm run test:e2e:ui
+npm run test:e2e:headed
+# Single E2E spec / filter
+npm run test:e2e -- e2e/app.spec.ts
+npx playwright test e2e/app.spec.ts -g "should do something"
+npx playwright test --project=chromium
 ```
 
 ## Project Structure
 
 ```
 src/
-├── app/                   # Next.js App Router pages
+├── app/                   # Next.js App Router routes
 ├── components/
-│   ├── ui/               # shadcn/ui primitives (DO NOT MODIFY)
-│   └── *.tsx             # App components
-├── lib/                   # Utilities, AI service, db.ts
-├── stores/               # Zustand stores (useXxxStore.ts)
-├── hooks/                # Custom React hooks
-├── types/                # TypeScript definitions
-└── test/                 # Test setup and mocks
-e2e/                      # Playwright E2E tests
+│   ├── ui/                 # shadcn/ui primitives (DO NOT MODIFY)
+│   └── *.tsx               # App components
+├── hooks/                  # Custom React hooks
+├── lib/                    # Utilities, services, db.ts
+├── stores/                 # Zustand stores (useXxxStore.ts)
+├── test/                   # Vitest setup + mocks
+└── types/                  # Shared TypeScript types
+e2e/                        # Playwright E2E tests
+docs/                       # Specs (sync/security)
 ```
+
+## Tooling & Config
+
+- TypeScript: strict mode, path alias `@/*` (see `tsconfig.json`)
+- ESLint: `next/core-web-vitals`, `next/typescript` (see `.eslintrc.json`)
+  - `@typescript-eslint/no-explicit-any`: error
+  - `@typescript-eslint/no-unused-vars`: warn, allow `_` prefix
+  - `prefer-const`: warn
+- Prettier: semicolons, double quotes, 2 spaces, `printWidth: 100` (see `.prettierrc`)
+  - `trailingComma: "es5"`, `prettier-plugin-tailwindcss`
+- Vitest: jsdom + `src/test/setup.ts` + `@` alias + Next.js module mocks (see `vitest.config.ts`)
+- Playwright: baseURL `http://localhost:3000`, dev server via `npm run dev` (see `playwright.config.ts`)
+- Env: copy `.env.example` to `.env.local` before running
+- shadcn/ui: `components.json` uses `style: new-york`, `baseColor: neutral`, `cssVariables: true`
+
+Cursor / Copilot rules: none found in `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md`.
 
 ## Code Style
 
-### TypeScript
+- Formatting: run `npm run format` after edits; do not hand-format Tailwind class order; use double quotes + semicolons.
+- Import order (preferred):
 
-- **Strict mode** - No `any`, no `@ts-ignore`, no `@ts-expect-error`
-- ESLint: `@typescript-eslint/no-explicit-any: "error"`
-- ESLint: `@typescript-eslint/no-unused-vars: ["warn", { "argsIgnorePattern": "^_" }]`
-- Path alias: `@/*` → `./src/*`
-- Types in `@/types/index.ts` or `@/types/*.ts`
-
-### Formatting (Prettier)
-
-- Double quotes, semicolons, 2-space indent
-- `printWidth: 100`, `trailingComma: "es5"`
-- Tailwind class sorting via `prettier-plugin-tailwindcss`
-
-### Import Order
-
-```typescript
-// 1. React/Next.js
+```ts
+// 1) React/Next
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-// 2. External libraries
+// 2) External libraries
 import { create } from "zustand";
-// 3. Internal (@/ alias)
+// 3) Internal (@/ alias)
 import { useTaskStore } from "@/stores/useTaskStore";
 import { Button } from "@/components/ui/button";
 import type { SyntropyTask } from "@/types";
 import { cn } from "@/lib/utils";
 ```
 
-### React Components
+TypeScript:
 
-```typescript
-"use client"; // Required for client components
+- Strict types only: no `any`, no `@ts-ignore`, no `@ts-expect-error`.
+- Prefer `unknown` + narrowing to handle dynamic data.
+- Prefer `import type { ... }` for types.
+- Shared domain types live in `src/types/`.
 
-interface TaskCardProps {
-  task: SyntropyTask;
-  onEdit?: (taskId: string) => void;
-}
+React / Next.js (App Router):
 
-export function TaskCard({ task, onEdit }: TaskCardProps) {
-  // Functional components, named exports
-}
-```
+- Default to Server Components; add `"use client";` only when needed.
+- Keep client boundaries small (push stateful UI down into client components).
+- Use named exports for components (`export function Foo() {}`) unless Next requires default exports.
 
-### Zustand Stores
+Naming:
 
-```typescript
-// File: useXxxStore.ts | Export: useXxxStore
-export const useTaskStore = create<TaskState>()((set, get) => ({
-  tasks: [],
-  isLoading: false,
-  loadTasks: async () => {
-    set({ isLoading: true });
-    try {
-      const tasks = await db.getActiveTasks();
-      set({ tasks, isLoading: false });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : "加载失败", isLoading: false });
-    }
-  },
-}));
-```
+- Components: `PascalCase.tsx` (e.g., `src/components/TaskCard.tsx`)
+- Hooks: `useXxx.ts` (e.g., `src/hooks/useUndo.ts`)
+- Zustand stores: `useXxxStore.ts`, export `useXxxStore`
+- Utilities: `camelCase.ts` in `src/lib/`
 
-### Error Handling
+State management (Zustand):
 
-```typescript
+- Keep async flows explicit with `isLoading` and `error`.
+- Prefer store actions returning `Promise<...>` for async operations.
+
+Error handling:
+
+```ts
 try {
   await someAsyncOperation();
 } catch (error) {
-  // NEVER empty catch blocks
   console.error("操作失败:", error);
   set({ error: error instanceof Error ? error.message : "未知错误" });
 }
 ```
 
-### Comments & JSDoc
+## Testing Notes
 
-```typescript
-/**
- * 核心任务模型 - 同步就绪版本
- * 包含所有同步元数据字段
- */
-export interface SyntropyTask {
-  /** 唯一标识符，格式: SYN-YYYY-XXXX */
-  id: string;
-}
-```
+- Unit tests: `src/**/*.{test,spec}.{ts,tsx}` (Vitest)
+- Test setup/mocks: `src/test/setup.ts`, plus Next mocks in `src/test/mocks/`
+- E2E: `e2e/` (Playwright). `playwright.config.ts` uses `forbidOnly: !!CI`.
 
-- JSDoc in Chinese for public APIs
-- Inline comments: Chinese or English
+## Domain Rules (Do Not Break)
+
+1. Local-first: IndexedDB (Dexie.js), sync later
+2. Soft delete: use `deletedAt`, never hard delete
+3. Conflict resolution: Lamport clock / `version`
+4. 5-second undo: all operations reversible
 
 ## ID Formats
 
@@ -144,58 +144,10 @@ export interface SyntropyTask {
 | Project | `PROJ-XXXX`     | `PROJ-0001`     |
 | Device  | `DEV-xxxxxxxx`  | `DEV-a1b2c3d4`  |
 
-## Testing
-
-### Unit Tests (Vitest)
-
-```typescript
-import { describe, it, expect } from "vitest";
-
-describe("parseCommand", () => {
-  it("should parse delete command", async () => {
-    const result = await parseCommand("删除任务");
-    expect(result.action).toBe("DELETE");
-  });
-});
-```
-
-### E2E Tests (Playwright)
-
-```typescript
-import { test, expect } from "@playwright/test";
-
-test("should load home page", async ({ page }) => {
-  await page.goto("/");
-  await expect(page).toHaveTitle(/凝序|Syntropy/i);
-});
-```
-
-## Key Patterns
-
-1. **Local-first**: IndexedDB (Dexie.js), sync to cloud later
-2. **Soft delete**: Use `deletedAt` field, never hard delete
-3. **Lamport clock**: `version` field for conflict resolution
-4. **5-second undo**: All operations reversible
-5. **PWA ready**: Offline support, installable
-
-## Tech Stack
-
-| Layer     | Technology                        |
-| --------- | --------------------------------- |
-| Framework | Next.js 14 (App Router)           |
-| UI        | Tailwind CSS + shadcn/ui          |
-| State     | Zustand                           |
-| Storage   | IndexedDB (Dexie.js)              |
-| Auth      | Supabase Auth                     |
-| AI        | OpenAI / DeepSeek / Gemini (BYOK) |
-| Testing   | Vitest + Playwright               |
-
 ## Do Not
 
-- Modify `@/components/ui/*` (shadcn primitives)
-- Use `any` type, `@ts-ignore`, or `@ts-expect-error`
+- Modify `src/components/ui/*` (shadcn/ui primitives)
+- Use `any`, `@ts-ignore`, or `@ts-expect-error`
 - Hard delete data (use `deletedAt`)
 - Commit API keys or secrets
-- Skip error handling in async operations
 - Leave empty catch blocks
-- Prefix unused params with `_` to silence warnings (allowed)
