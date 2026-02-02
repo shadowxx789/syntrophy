@@ -69,20 +69,6 @@ function mapStatusToDisplay(status: SyntropyTask["status"]): string {
 }
 
 /**
- * 格式化日期时间
- */
-function formatDateTime(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-/**
  * 将 Excel 文件解析为任务数据 (Phase 2 导入功能预留)
  *
  * @param file Excel 文件

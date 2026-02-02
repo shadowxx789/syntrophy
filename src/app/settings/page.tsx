@@ -30,7 +30,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { encryptApiKey, decryptApiKey, maskApiKey } from "@/lib/crypto";
 import {
+  buildLocalBackupExport,
+  downloadJsonFile,
+  getJsonExportFileName,
+  type ExportedSettings,
+} from "@/lib/exportJson";
+import { importLocalBackupJson } from "@/lib/importJson";
+import {
   validateApiKey,
+  COMMON_CUSTOM_PROVIDERS,
   getProviderDisplayName,
   GEMINI_MODELS,
   DEFAULT_GEMINI_MODEL,
@@ -41,7 +49,7 @@ import {
   DEFAULT_USER_PROMPT_TEMPLATE,
   DEFAULT_CONTEXT_PROMPT_TEMPLATE,
 } from "@/lib/ai/prompts";
-import type { AIProvider, PromptPreset, CustomProviderExport } from "@/types";
+import type { AIProvider, PromptPreset, CustomProviderExport, SavedCustomProvider } from "@/types";
 import { MAX_CUSTOM_PROVIDERS } from "@/types";
 import { CustomProviderModal } from "@/components/CustomProviderModal";
 import { CustomProviderCard } from "@/components/CustomProviderCard";
@@ -56,6 +64,7 @@ export default function SettingsPage() {
     theme,
     deviceId,
     savedCustomProviders,
+    savedRecipients,
     selectedCustomProviderId,
     setAIProvider,
     setEncryptedApiKey,
@@ -65,7 +74,6 @@ export default function SettingsPage() {
     resetPrompts,
     setTheme,
     selectCustomProvider,
-    updateCustomProviderApiKey,
     getSelectedCustomProvider,
     exportCustomProviders,
     importCustomProviders,
@@ -86,6 +94,9 @@ export default function SettingsPage() {
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [isImportingData, setIsImportingData] = useState(false);
+  const [dataImportError, setDataImportError] = useState<string | null>(null);
 
   // 提示词配置状态
   const [promptsEnabled, setPromptsEnabled] = useState(customPrompts?.enabled ?? false);
@@ -147,6 +158,19 @@ export default function SettingsPage() {
       setMaskedKey("");
       setApiKeyInput("");
     }
+  };
+
+  // 选择预设的自定义提供商
+  const handleSelectPreset = (preset: (typeof COMMON_CUSTOM_PROVIDERS)[number]) => {
+    setCustomName(preset.name);
+    setCustomBaseUrl(preset.baseUrl);
+    setCustomModel(preset.model);
+    setCustomAIConfig({
+      name: preset.name,
+      baseUrl: preset.baseUrl,
+      model: preset.model,
+    });
+    setAIProvider("custom");
   };
 
   // 保存自定义配置
@@ -341,6 +365,117 @@ export default function SettingsPage() {
     input.click();
   };
 
+  const handleExportAllData = async () => {
+    if (isExportingData) return;
+    setIsExportingData(true);
+
+    try {
+      const exportData = await buildLocalBackupExport({
+        settings: {
+          aiProvider,
+          encryptedApiKey,
+          customAIConfig,
+          customPrompts,
+          theme,
+          geminiModel,
+          savedCustomProviders,
+          selectedCustomProviderId,
+          savedRecipients,
+        },
+      });
+
+      downloadJsonFile(exportData, getJsonExportFileName("syntropy-backup"));
+    } catch (error) {
+      console.error("导出失败:", error);
+      alert("导出失败，请稍后重试");
+    } finally {
+      setIsExportingData(false);
+    }
+  };
+
+  const applyImportedSettings = (settings?: ExportedSettings) => {
+    if (!settings) return;
+
+    if (settings.aiProvider) {
+      setAIProvider(settings.aiProvider);
+    }
+    if (settings.customAIConfig !== undefined) {
+      setCustomAIConfig(settings.customAIConfig);
+    }
+    if (settings.geminiModel !== undefined) {
+      setGeminiModel(settings.geminiModel);
+    }
+    if (settings.customPrompts !== undefined) {
+      setCustomPrompts(settings.customPrompts);
+    }
+    if (settings.theme) {
+      setTheme(settings.theme);
+    }
+    if (settings.savedRecipients) {
+      useSettingsStore.setState({ savedRecipients: settings.savedRecipients });
+    }
+
+    if (settings.savedCustomProviders) {
+      const existingProviders = useSettingsStore.getState().savedCustomProviders || [];
+      const nextProviders: SavedCustomProvider[] = settings.savedCustomProviders.map((provider) => {
+        const { hasApiKey, ...rest } = provider;
+        const existing = existingProviders.find((item) => item.id === rest.id);
+        const preserveKey = hasApiKey || !!existing?.encryptedApiKey;
+        return {
+          ...rest,
+          encryptedApiKey: preserveKey ? existing?.encryptedApiKey : undefined,
+        };
+      });
+
+      const selectedId = settings.selectedCustomProviderId;
+      const nextSelectedId =
+        selectedId && nextProviders.some((provider) => provider.id === selectedId)
+          ? selectedId
+          : nextProviders[0]?.id;
+
+      useSettingsStore.setState({
+        savedCustomProviders: nextProviders,
+        selectedCustomProviderId: nextSelectedId,
+      });
+    } else if (settings.selectedCustomProviderId !== undefined) {
+      useSettingsStore.setState({ selectedCustomProviderId: settings.selectedCustomProviderId });
+    }
+  };
+
+  const handleImportAllData = () => {
+    if (isImportingData) return;
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const confirmed = window.confirm("导入将覆盖本地数据，是否继续？");
+      if (!confirmed) return;
+
+      setIsImportingData(true);
+      setDataImportError(null);
+
+      try {
+        const text = await file.text();
+        const result = await importLocalBackupJson(text);
+        applyImportedSettings(result.settings);
+
+        if (result.hasGlobalApiKey || result.hasCustomProviderApiKey) {
+          alert("检测到备份包含 API Key 标记，请在设置中重新输入 API Key。");
+        }
+      } catch (error) {
+        console.error("导入失败:", error);
+        setDataImportError(error instanceof Error ? error.message : "导入失败，请检查文件格式");
+      } finally {
+        setIsImportingData(false);
+      }
+    };
+    input.click();
+  };
+
   // 获取当前选中的自定义配置
   const selectedProvider = getSelectedCustomProvider();
 
@@ -430,9 +565,18 @@ export default function SettingsPage() {
                     </>
                   ) : null}
 
+                  {/* 快速预设（用于添加） */}
                   <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                    提示：预设可在“添加新配置”中选择
+                    快速预设
                   </DropdownMenuItem>
+                  {COMMON_CUSTOM_PROVIDERS.slice(0, 3).map((preset) => (
+                    <DropdownMenuItem key={preset.name} onClick={() => handleSelectPreset(preset)}>
+                      <div className="flex flex-col">
+                        <span>{preset.name}</span>
+                        <span className="text-xs text-muted-foreground">{preset.model}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -527,104 +671,62 @@ export default function SettingsPage() {
           )}
 
           {/* API Key 输入 */}
-          {aiProvider === "custom" ? (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">API Key</label>
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <p className="text-sm">
-                  自定义模式下，API Key 与“自定义配置”绑定（每个配置单独保存）。
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  请在上方“当前选中的配置卡片”中验证并保存 API Key。
-                </p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">API Key</label>
 
-                {!selectedProvider && (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    尚未选择自定义配置：请从上方下拉菜单选择，或点击“添加配置”。
-                  </p>
-                )}
-
-                {selectedProvider && encryptedApiKey && !selectedProvider.encryptedApiKey && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      检测到旧版“全局 API Key”（历史遗留）。如果你之前把自定义服务的 Key
-                      保存在这里，可以一键复制到当前配置。
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() =>
-                        updateCustomProviderApiKey(selectedProvider.id, encryptedApiKey)
-                      }
-                    >
-                      复制到当前配置
-                    </Button>
-                  </div>
-                )}
-
-                <p className="mt-3 text-xs text-muted-foreground">
-                  API Key 使用设备指纹加密存储在本地，不会上传到服务器。切换设备需要重新配置。
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">API Key</label>
-
-              {/* 已保存的 Key */}
-              {maskedKey && (
-                <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
-                  <span className="flex-1 font-mono text-sm">{maskedKey}</span>
-                  <Button variant="ghost" size="sm" onClick={handleClearApiKey}>
-                    清除
-                  </Button>
-                </div>
-              )}
-
-              {/* 输入新 Key */}
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showApiKey ? "text" : "password"}
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder={maskedKey ? "输入新的 API Key..." : "sk-..."}
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                  >
-                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <Button onClick={handleSaveApiKey} disabled={!apiKeyInput.trim() || isValidating}>
-                  {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "验证并保存"}
+            {/* 已保存的 Key */}
+            {maskedKey && (
+              <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
+                <span className="flex-1 font-mono text-sm">{maskedKey}</span>
+                <Button variant="ghost" size="sm" onClick={handleClearApiKey}>
+                  清除
                 </Button>
               </div>
+            )}
 
-              {/* 验证结果 */}
-              {validationResult === "success" && (
-                <p className="flex items-center gap-1 text-sm text-green-600">
-                  <Check className="h-4 w-4" />
-                  API Key 验证成功并已保存
-                </p>
-              )}
-              {validationResult === "error" && (
-                <p className="flex items-center gap-1 text-sm text-destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  验证失败，请检查 API Key 和配置是否正确
-                </p>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                API Key 使用设备指纹加密存储在本地，不会上传到服务器。 切换设备需要重新配置。
-              </p>
+            {/* 输入新 Key */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={maskedKey ? "输入新的 API Key..." : "sk-..."}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <Button onClick={handleSaveApiKey} disabled={!apiKeyInput.trim() || isValidating}>
+                {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "验证并保存"}
+              </Button>
             </div>
-          )}
+
+            {/* 验证结果 */}
+            {validationResult === "success" && (
+              <p className="flex items-center gap-1 text-sm text-green-600">
+                <Check className="h-4 w-4" />
+                API Key 验证成功并已保存
+              </p>
+            )}
+            {validationResult === "error" && (
+              <p className="flex items-center gap-1 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                验证失败，请检查 API Key 和配置是否正确
+              </p>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              API Key 使用设备指纹加密存储在本地，不会上传到服务器。 切换设备需要重新配置。
+            </p>
+          </div>
         </section>
 
         {/* AI 提示词配置 */}
@@ -795,14 +897,37 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold">数据管理</h2>
 
           <div className="flex gap-2">
-            <Button variant="outline" disabled>
+            <Button
+              variant="outline"
+              onClick={handleExportAllData}
+              disabled={isExportingData}
+              className="gap-2"
+            >
+              {isExportingData && <Loader2 className="h-4 w-4 animate-spin" />}
               导出全部数据
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleImportAllData}
+              disabled={isImportingData}
+              className="gap-2"
+            >
+              {isImportingData && <Loader2 className="h-4 w-4 animate-spin" />}
+              导入全部数据
             </Button>
             <Button variant="destructive" disabled>
               清除所有数据
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">数据管理功能将在后续版本中提供。</p>
+          <p className="text-xs text-muted-foreground">
+            当前支持数据导出，清除功能将在后续版本中提供。
+          </p>
+          {dataImportError && (
+            <p className="flex items-center gap-1 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              {dataImportError}
+            </p>
+          )}
         </section>
 
         {/* 关于 */}

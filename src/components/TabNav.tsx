@@ -16,15 +16,9 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_PROJECT_ID } from "@/lib/db";
 
 export function TabNav() {
-  const {
-    projects,
-    currentProjectId,
-    setCurrentProject,
-    createProject,
-    renameProject,
-    archiveProject,
-  } = useProjectStore();
-
+  const { projects, currentProjectId, setCurrentProject, createProject, renameProject, archiveProject } =
+    useProjectStore();
+  
   const [isCreating, setIsCreating] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -67,14 +61,13 @@ export function TabNav() {
   };
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto border-b bg-muted/30 px-2 py-1.5 sm:gap-1 sm:py-1">
+    <div className="flex items-center gap-1 overflow-x-auto border-b bg-muted/30 px-2 py-1">
       {/* Project Tabs */}
       {projects.map((project) => (
         <div
           key={project.id}
           className={cn(
-            "group flex shrink-0 items-center gap-1 rounded-md px-3 py-2 text-sm transition-colors sm:py-1.5",
-            "touch-manipulation",
+            "group flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors",
             currentProjectId === project.id
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -98,22 +91,21 @@ export function TabNav() {
           ) : (
             <button
               onClick={() => setCurrentProject(project.id)}
-              className="min-h-[28px] touch-manipulation font-medium"
+              className="font-medium"
             >
               {project.name}
             </button>
           )}
 
-          {/* Tab Menu - always visible on mobile, hover on desktop */}
+          {/* Tab Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="ml-1 h-7 w-7 touch-manipulation opacity-100 sm:h-5 sm:w-5 sm:opacity-0 sm:group-hover:opacity-100"
-                aria-label="项目菜单"
+                className="ml-1 h-5 w-5 opacity-0 group-hover:opacity-100"
               >
-                <MoreHorizontal className="h-4 w-4 sm:h-3 sm:w-3" />
+                <MoreHorizontal className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -155,13 +147,7 @@ export function TabNav() {
             placeholder="项目名称"
             className="h-7 w-28 text-sm"
           />
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={handleCreateProject}
-            aria-label="创建项目"
-          >
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCreateProject}>
             <Plus className="h-4 w-4" />
           </Button>
           <Button
@@ -172,7 +158,6 @@ export function TabNav() {
               setIsCreating(false);
               setNewProjectName("");
             }}
-            aria-label="取消创建"
           >
             <X className="h-4 w-4" />
           </Button>

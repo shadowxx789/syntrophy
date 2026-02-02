@@ -37,18 +37,7 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
 
   const { tasks, createTask, updateTask, deleteTask } = useTaskStore();
   const { currentProjectId } = useProjectStore();
-  const {
-    aiProvider,
-    encryptedApiKey,
-    customAIConfig,
-    customPrompts,
-    geminiModel,
-    getSelectedCustomProvider,
-  } = useSettingsStore();
-
-  const selectedCustomProvider = aiProvider === "custom" ? getSelectedCustomProvider() : undefined;
-  const effectiveEncryptedApiKey =
-    aiProvider === "custom" ? selectedCustomProvider?.encryptedApiKey : encryptedApiKey;
+  const { aiProvider, encryptedApiKey, customAIConfig, customPrompts } = useSettingsStore();
 
   const UPDATE_KEYWORD_REGEX = /(修改|更新|改成|调整)/;
   const UPDATE_PREFIX_REGEX = /^(完成|做完了?|标记完成|修改|更新|改成|调整)\s*/;
@@ -73,11 +62,6 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
     const trimmedInput = input.trim();
     if (!trimmedInput || isProcessing) return;
 
-    // 触觉反馈
-    if (navigator.vibrate) {
-      navigator.vibrate(10);
-    }
-
     setIsProcessing(true);
     setError(null);
     setLastParsed(null);
@@ -86,17 +70,15 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
       let parsedCommand: ParsedCommand;
 
       // 检查是否启用 AI 且有 API Key
-      if (aiEnabled && effectiveEncryptedApiKey) {
+      if (aiEnabled && encryptedApiKey) {
         try {
-          const apiKey = await decryptApiKey(effectiveEncryptedApiKey);
+          const apiKey = await decryptApiKey(encryptedApiKey);
           parsedCommand = await parseCommand(
             trimmedInput,
             {
               provider: aiProvider,
               apiKey,
-              model: aiProvider === "gemini" ? geminiModel : undefined,
-              customConfig:
-                aiProvider === "custom" ? selectedCustomProvider || customAIConfig : undefined,
+              customConfig: aiProvider === "custom" ? customAIConfig : undefined,
             },
             // 只传递未删除的任务给 AI
             tasks.filter((t) => !t.deletedAt).map((t) => ({ id: t.id, content: t.content })),
@@ -318,10 +300,10 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
     }
   };
 
-  const hasApiKey = !!effectiveEncryptedApiKey;
+  const hasApiKey = !!encryptedApiKey;
 
   return (
-    <div className="safe-area-inset-bottom fixed bottom-20 left-0 right-0 z-50 border-t bg-background p-4 sm:static sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto">
+    <div className="safe-area-inset-bottom border-t bg-background p-4">
       {/* Error Display */}
       {error && (
         <div className="mb-2 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -330,14 +312,13 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
         </div>
       )}
 
-      <div className="relative flex items-center gap-3">
+      <div className="relative flex items-center gap-2">
         {/* AI Toggle - larger touch target on mobile */}
         <Button
           variant={aiEnabled && hasApiKey ? "default" : "outline"}
           size="icon"
           onClick={() => setAiEnabled(!aiEnabled)}
           disabled={!hasApiKey}
-          aria-label={aiEnabled && hasApiKey ? "AI 解析已启用" : "AI 解析已禁用"}
           title={
             hasApiKey
               ? aiEnabled
@@ -362,9 +343,6 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
             aiEnabled && hasApiKey ? "Enter natural language command..." : "Enter task content..."
           }
           disabled={isProcessing}
-          inputMode="text"
-          autoComplete="off"
-          autoCorrect="off"
           className="h-11 flex-1 touch-manipulation text-base sm:h-10 sm:text-sm"
         />
 
@@ -391,8 +369,7 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
           {aiEnabled && hasApiKey ? (
             <>
               <Sparkles className="mr-1 inline h-3 w-3" />
-              AI parsing enabled (
-              {getProviderDisplayName(aiProvider, selectedCustomProvider || customAIConfig)})
+              AI parsing enabled ({getProviderDisplayName(aiProvider, customAIConfig)})
             </>
           ) : hasApiKey ? (
             "AI parsing disabled, click the button to enable"

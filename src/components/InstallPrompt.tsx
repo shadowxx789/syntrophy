@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Share, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isPWAInstalled } from "@/lib/registerSW";
@@ -11,21 +10,15 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-// Delay before showing install prompt (10 seconds for better UX)
-const INSTALL_PROMPT_DELAY = 10000;
-// iOS prompt delay (20 seconds - slightly longer for Safari users)
-const IOS_PROMPT_DELAY = 20000;
-// Days to wait before showing prompt again after dismissal
-const DISMISS_COOLDOWN_DAYS = 7;
-
 /**
  * InstallPrompt Component
  *
  * Shows a prompt to install the PWA on supported browsers.
- * Handles both desktop and mobile install flows with improved iOS experience.
+ * Handles both desktop and mobile install flows.
  */
 export function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -38,28 +31,30 @@ export function InstallPrompt() {
       return;
     }
 
-    // Check if dismissed recently
+    // Check if dismissed recently (within 7 days)
     const dismissedAt = localStorage.getItem("pwa-install-dismissed");
     if (dismissedAt) {
       const dismissedDate = new Date(dismissedAt);
-      const daysSinceDismissed = (Date.now() - dismissedDate.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceDismissed < DISMISS_COOLDOWN_DAYS) {
+      const daysSinceDismissed =
+        (Date.now() - dismissedDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceDismissed < 7) {
         return;
       }
     }
 
     // Detect iOS
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);
+    const isIOSDevice =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);
     setIsIOS(isIOSDevice);
 
-    // Listen for install prompt (Chrome, Edge, etc.)
+    // Listen for install prompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Show prompt after shorter delay (10s instead of 30s)
+      // Show prompt after 30 seconds on page
       setTimeout(() => {
         setIsVisible(true);
-      }, INSTALL_PROMPT_DELAY);
+      }, 30000);
     };
 
     // Listen for successful install
@@ -72,26 +67,24 @@ export function InstallPrompt() {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // Show iOS guide after shorter delay (20s instead of 60s)
+    // Show iOS guide after delay if on iOS
     if (isIOSDevice) {
       setTimeout(() => {
         setIsVisible(true);
-      }, IOS_PROMPT_DELAY);
+      }, 60000); // Show after 1 minute on iOS
     }
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt
+      );
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
-
-    // Haptic feedback
-    if (navigator.vibrate) {
-      navigator.vibrate(10);
-    }
 
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
@@ -121,12 +114,10 @@ export function InstallPrompt() {
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-50 p-4 sm:bottom-4 sm:left-auto sm:right-4 sm:max-w-sm",
-          "duration-300 animate-in fade-in slide-in-from-bottom-4",
-          // Safe area for mobile bottom bar
-          "pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4"
+          "animate-in slide-in-from-bottom-4 fade-in duration-300"
         )}
       >
-        <div className="rounded-xl border bg-card p-4 shadow-lg">
+        <div className="rounded-xl border bg-white dark:bg-slate-900 p-4 shadow-lg">
           <div className="flex items-start gap-4">
             {/* Icon */}
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1a1a2e] to-[#16213e]">
@@ -135,32 +126,31 @@ export function InstallPrompt() {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                aria-hidden="true"
               >
                 <polygon points="12 2 19 21 12 17 5 21 12 2" />
               </svg>
             </div>
 
             {/* Content */}
-            <div className="min-w-0 flex-1">
-              <h3 className="font-semibold">安装凝序</h3>
-              <p className="mt-1 text-sm text-muted-foreground">添加到主屏幕，享受原生应用体验</p>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold">Install Syntropy</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add to your home screen for the best experience
+              </p>
 
               {/* Buttons */}
               <div className="mt-3 flex gap-2">
                 {isIOS ? (
-                  <Button size="sm" onClick={handleShowIOSGuide} className="gap-1.5">
-                    <Share className="h-4 w-4" />
-                    安装方法
+                  <Button size="sm" onClick={handleShowIOSGuide}>
+                    How to Install
                   </Button>
                 ) : deferredPrompt ? (
-                  <Button size="sm" onClick={handleInstall} className="gap-1.5">
-                    <Download className="h-4 w-4" />
-                    安装
+                  <Button size="sm" onClick={handleInstall}>
+                    Install
                   </Button>
                 ) : null}
                 <Button size="sm" variant="ghost" onClick={handleDismiss}>
-                  稍后
+                  Not now
                 </Button>
               </div>
             </div>
@@ -169,9 +159,20 @@ export function InstallPrompt() {
             <button
               onClick={handleDismiss}
               className="rounded-full p-1 hover:bg-muted"
-              aria-label="关闭安装提示"
             >
-              <X className="h-4 w-4 text-muted-foreground" />
+              <svg
+                className="h-4 w-4 text-muted-foreground"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -181,65 +182,79 @@ export function InstallPrompt() {
       {showIOSGuide && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           {/* Backdrop */}
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowIOSGuide(false)} />
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setShowIOSGuide(false)}
+          />
 
           {/* Modal */}
-          <div
-            className={cn(
-              "relative w-full max-w-md rounded-t-xl bg-card p-6 shadow-xl sm:rounded-xl",
-              "animate-in slide-in-from-bottom-4",
-              "pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6"
-            )}
-          >
+          <div className="relative w-full max-w-md rounded-t-xl sm:rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl animate-in slide-in-from-bottom-4">
             <button
               onClick={() => setShowIOSGuide(false)}
               className="absolute right-4 top-4 rounded-full p-1 hover:bg-muted"
-              aria-label="关闭安装指南"
             >
-              <X className="h-5 w-5 text-muted-foreground" />
+              <svg
+                className="h-5 w-5 text-muted-foreground"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
             </button>
 
-            <h3 className="text-lg font-semibold">在 iOS 上安装</h3>
-            <p className="mt-2 text-sm text-muted-foreground">按照以下步骤将凝序添加到主屏幕：</p>
+            <h3 className="text-lg font-semibold">Install on iOS</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Follow these steps to add Syntropy to your home screen:
+            </p>
 
             <ol className="mt-4 space-y-4">
               <li className="flex gap-3">
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-xs font-bold text-blue-600 dark:text-blue-400">
                   1
                 </span>
-                <div className="flex-1">
-                  <p className="flex items-center gap-2 font-medium">
-                    点击分享按钮
-                    <Share className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Tap the Share button</p>
+                  <p className="text-sm text-muted-foreground">
+                    Look for the square with an arrow pointing up at the bottom
+                    of Safari
                   </p>
-                  <p className="text-sm text-muted-foreground">Safari 底部的方形带箭头图标</p>
                 </div>
               </li>
               <li className="flex gap-3">
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-xs font-bold text-blue-600 dark:text-blue-400">
                   2
                 </span>
-                <div className="flex-1">
-                  <p className="flex items-center gap-2 font-medium">
-                    选择「添加到主屏幕」
-                    <Plus className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Scroll and tap Add to Home Screen</p>
+                  <p className="text-sm text-muted-foreground">
+                    You may need to scroll down in the share menu
                   </p>
-                  <p className="text-sm text-muted-foreground">可能需要向下滚动菜单查找</p>
                 </div>
               </li>
               <li className="flex gap-3">
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-xs font-bold text-blue-600 dark:text-blue-400">
                   3
                 </span>
-                <div className="flex-1">
-                  <p className="font-medium">点击「添加」</p>
-                  <p className="text-sm text-muted-foreground">应用图标将出现在主屏幕上</p>
+                <div>
+                  <p className="font-medium">Tap Add</p>
+                  <p className="text-sm text-muted-foreground">
+                    The app will appear on your home screen
+                  </p>
                 </div>
               </li>
             </ol>
 
-            <Button className="mt-6 w-full" onClick={() => setShowIOSGuide(false)}>
-              我知道了
+            <Button
+              className="mt-6 w-full"
+              onClick={() => setShowIOSGuide(false)}
+            >
+              Got it!
             </Button>
           </div>
         </div>

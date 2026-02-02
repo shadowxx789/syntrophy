@@ -131,7 +131,6 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
           <Button
             variant="ghost"
             size="icon"
-            aria-label="任务操作菜单"
             className={cn(
               "h-10 w-10 touch-manipulation transition-opacity sm:h-8 sm:w-8",
               // Always visible on mobile (no hover), fade on desktop

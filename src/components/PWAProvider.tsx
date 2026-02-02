@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { registerSW, isPWAInstalled, isOnline } from "@/lib/registerSW";
+import { registerSW, isPWAInstalled, isOnline, clearSWCache, skipWaiting } from "@/lib/registerSW";
 import { setupOfflineSync } from "@/lib/offlineQueue";
-import { AuthBootstrap } from "@/components/AuthBootstrap";
-import { AuthRouteGate } from "@/components/AuthRouteGate";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { InstallPrompt } from "./InstallPrompt";
-import { SWUpdateToast } from "./SWUpdateToast";
 
 /**
  * PWA Provider Component
@@ -21,7 +18,6 @@ import { SWUpdateToast } from "./SWUpdateToast";
 export function PWAProvider({ children }: { children: React.ReactNode }) {
   const [isOffline, setIsOffline] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [showUpdateToast, setShowUpdateToast] = useState(true);
 
   useEffect(() => {
     // Initialize online status
@@ -32,7 +28,8 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
       onUpdate: () => {
         console.log("[PWAProvider] Update available");
         setUpdateAvailable(true);
-        // Don't auto-clear cache and skipWaiting - let user decide
+        void clearSWCache();
+        skipWaiting();
       },
       onSuccess: () => {
         console.log("[PWAProvider] SW registered successfully");
@@ -62,23 +59,12 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
     return cleanup;
   }, []);
 
-  const handleDismissUpdate = () => {
-    setShowUpdateToast(false);
-    // Remember dismissal for this session
-    // Update toast will show again after page refresh or SW update
-  };
-
   // Expose context values via data attributes for components that need them
   return (
     <div data-offline={isOffline} data-update-available={updateAvailable} className="contents">
-      <AuthBootstrap />
-      <AuthRouteGate>{children}</AuthRouteGate>
+      {children}
       <OfflineIndicator />
       <InstallPrompt />
-      <SWUpdateToast
-        hasUpdate={updateAvailable && showUpdateToast}
-        onDismiss={handleDismissUpdate}
-      />
     </div>
   );
 }

@@ -10,22 +10,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { SyncIndicator } from "@/components/SyncIndicator";
 import { backupAllToCloud, fullRestore, getSyncStatus } from "@/lib/syncService";
 import { ArrowLeft, User, Mail, LogOut, RefreshCw, Download, Loader2, Trash2 } from "lucide-react";
-import { db, DEFAULT_PROJECT_ID } from "@/lib/db";
+import { db } from "@/lib/db";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -38,6 +27,7 @@ export default function ProfilePage() {
     text: string;
   } | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -66,7 +56,7 @@ export default function ProfilePage() {
       if (result.success) {
         setMessage({
           type: "success",
-          text: `备份完成：已上传 ${result.uploaded.tasks} 个任务，${result.uploaded.projects} 个项目`,
+          text: `备份完成：上传 ${result.uploaded.tasks} 个任务，${result.uploaded.projects} 个项目`,
         });
       } else {
         setMessage({ type: "error", text: "备份失败，请重试" });
@@ -83,6 +73,7 @@ export default function ProfilePage() {
 
     setIsRestoring(true);
     setMessage(null);
+    setShowRestoreConfirm(false);
 
     try {
       const result = await fullRestore(user.id);
@@ -104,43 +95,33 @@ export default function ProfilePage() {
 
   const handleClearLocalData = async () => {
     try {
-      const now = new Date().toISOString();
-
       await db.transaction("rw", [db.tasks, db.projects], async () => {
-        const tasks = await db.tasks.toArray();
-        if (tasks.length > 0) {
-          await db.tasks.bulkPut(
-            tasks.map((task) => ({
-              ...task,
-              deletedAt: now,
-              updatedAt: now,
-              version: task.version + 1,
-            }))
-          );
+        const [tasks, projects] = await Promise.all([db.tasks.toArray(), db.projects.toArray()]);
+        const now = new Date().toISOString();
+
+        const softDeletedTasks = tasks.map((task) => ({
+          ...task,
+          deletedAt: now,
+          updatedAt: now,
+          version: task.version + 1,
+        }));
+
+        const softDeletedProjects = projects.map((project) => ({
+          ...project,
+          deletedAt: now,
+          updatedAt: now,
+          version: project.version + 1,
+        }));
+
+        if (softDeletedTasks.length > 0) {
+          await db.tasks.bulkPut(softDeletedTasks);
         }
-
-        const projects = await db.projects.toArray();
-        if (projects.length > 0) {
-          await db.projects.bulkPut(
-            projects.map((project) => {
-              if (project.id === DEFAULT_PROJECT_ID) {
-                return project;
-              }
-
-              return {
-                ...project,
-                isArchived: true,
-                deletedAt: now,
-                updatedAt: now,
-                version: project.version + 1,
-              };
-            })
-          );
+        if (softDeletedProjects.length > 0) {
+          await db.projects.bulkPut(softDeletedProjects);
         }
       });
-
       setShowClearConfirm(false);
-      setMessage({ type: "success", text: "本地数据已清除（建议立即备份以同步到云端）" });
+      setMessage({ type: "success", text: "本地数据已清除" });
     } catch {
       setMessage({ type: "error", text: "清除失败，请重试" });
     }
@@ -205,21 +186,21 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Backup Section */}
+        {/* Sync Section */}
         <div className="rounded-2xl bg-slate-800/50 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-white">云端备份</h2>
+          <h2 className="mb-4 text-lg font-semibold text-white">数据同步</h2>
 
           <div className="space-y-3">
-            {/* Backup Status */}
+            {/* Sync Status */}
             <div className="flex items-center justify-between rounded-lg bg-slate-700/30 p-3">
-              <span className="text-sm text-slate-300">备份状态</span>
+              <span className="text-sm text-slate-300">同步状态</span>
               <SyncIndicator showLabel />
             </div>
 
-            {/* Last Backup */}
+            {/* Last Sync */}
             {syncStatus.lastSyncAt && (
               <div className="flex items-center justify-between rounded-lg bg-slate-700/30 p-3">
-                <span className="text-sm text-slate-300">上次备份</span>
+                <span className="text-sm text-slate-300">上次同步</span>
                 <span className="text-sm text-slate-400">
                   {syncStatus.lastSyncAt.toLocaleString("zh-CN")}
                 </span>
@@ -241,41 +222,39 @@ export default function ProfilePage() {
                 )}
                 立即备份
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+              {!showRestoreConfirm ? (
+                <Button
+                  onClick={() => setShowRestoreConfirm(true)}
+                  disabled={isSyncing || isRestoring}
+                  variant="outline"
+                  className="h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  {isRestoring ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  恢复数据
+                </Button>
+              ) : (
+                <div className="col-span-2 flex gap-2">
                   <Button
+                    onClick={handleRestore}
+                    disabled={isSyncing || isRestoring}
+                    className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    确认恢复
+                  </Button>
+                  <Button
+                    onClick={() => setShowRestoreConfirm(false)}
                     disabled={isSyncing || isRestoring}
                     variant="outline"
-                    className="h-12 border-slate-600 text-slate-300 hover:bg-slate-700"
+                    className="flex-1 border-slate-600 text-slate-300"
                   >
-                    {isRestoring ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    恢复数据
+                    取消
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>恢复云端数据</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      此操作会清空并覆盖本地数据，然后从云端下载项目与任务。请确认你已经完成过云端备份。
-                      如果云端没有数据，本地也会被清空。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isRestoring}>取消</AlertDialogCancel>
-                    <AlertDialogAction
-                      disabled={isRestoring}
-                      className="bg-red-600 text-white hover:bg-red-700"
-                      onClick={handleRestore}
-                    >
-                      确认恢复
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                </div>
+              )}
             </div>
           </div>
         </div>

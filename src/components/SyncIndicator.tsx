@@ -49,14 +49,14 @@ export function SyncIndicator({ className, showLabel = false }: SyncIndicatorPro
 
     switch (status.state) {
       case "syncing":
-        return "备份中...";
+        return "同步中...";
       case "error":
-        return "备份失败";
+        return "同步失败";
       case "idle":
         if (status.lastSyncAt) {
           return formatLastSync(status.lastSyncAt);
         }
-        return "未备份";
+        return "未同步";
       default:
         return "未知状态";
     }
@@ -104,12 +104,12 @@ function formatLastSync(date: Date): string {
   const days = Math.floor(diff / 86400000);
 
   if (minutes < 1) {
-    return "刚刚备份";
+    return "刚刚同步";
   } else if (minutes < 60) {
-    return `${minutes}分钟前备份`;
+    return `${minutes}分钟前`;
   } else if (hours < 24) {
-    return `${hours}小时前备份`;
+    return `${hours}小时前`;
   } else {
-    return `${days}天前备份`;
+    return `${days}天前`;
   }
 }

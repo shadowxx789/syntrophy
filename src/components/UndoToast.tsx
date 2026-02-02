@@ -22,7 +22,13 @@ interface UndoToastProps {
   visible: boolean;
 }
 
-export function UndoToast({ message, onUndo, onClose, duration = 5, visible }: UndoToastProps) {
+export function UndoToast({
+  message,
+  onUndo,
+  onClose,
+  duration = 5,
+  visible,
+}: UndoToastProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
   const [progress, setProgress] = useState(100);
 
@@ -60,7 +66,7 @@ export function UndoToast({ message, onUndo, onClose, duration = 5, visible }: U
     <div
       className={cn(
         "fixed bottom-20 left-1/2 z-50 -translate-x-1/2",
-        "duration-300 animate-in fade-in slide-in-from-bottom-4"
+        "animate-in slide-in-from-bottom-4 fade-in duration-300"
       )}
     >
       <div className="relative overflow-hidden rounded-lg border bg-background shadow-lg">
@@ -99,7 +105,6 @@ export function UndoToast({ message, onUndo, onClose, duration = 5, visible }: U
             size="icon"
             onClick={onClose}
             className="h-6 w-6"
-            aria-label="关闭提示"
           >
             <X className="h-4 w-4" />
           </Button>
