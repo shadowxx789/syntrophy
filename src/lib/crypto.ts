@@ -96,8 +96,14 @@ export async function encryptApiKey(plaintext: string): Promise<string> {
   combined.set(iv, SALT_LENGTH);
   combined.set(new Uint8Array(ciphertext), SALT_LENGTH + IV_LENGTH);
 
-  // Base64 编码
-  return btoa(String.fromCharCode.apply(null, Array.from(combined)));
+  // Base64 编码（分块避免 apply 栈溢出）
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < combined.length; i += chunkSize) {
+    const chunk = combined.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
 }
 
 /**
@@ -110,12 +116,12 @@ export async function decryptApiKey(encrypted: string): Promise<string> {
   const decoder = new TextDecoder();
   const password = getDeviceFingerprint();
 
-  // Base64 解码
-  const combined = new Uint8Array(
-    atob(encrypted)
-      .split("")
-      .map((c) => c.charCodeAt(0))
-  );
+  // Base64 解码（直接用 atob + Uint8Array.from，避免 split/map 大字符串开销）
+  const binary = atob(encrypted);
+  const combined = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    combined[i] = binary.charCodeAt(i);
+  }
 
   // 分离 salt, iv, ciphertext
   const salt = combined.slice(0, SALT_LENGTH);

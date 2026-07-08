@@ -85,14 +85,14 @@ export async function parseCommand(
 
     return normalizeResult(result, trimmedInput);
   } catch (error) {
-    console.error("AI 解析失败:", error);
+    const errorMsg = error instanceof Error ? error.message : "AI 解析失败";
 
-    // 降级处理：作为简单添加任务
+    // 降级处理：标记为 UNKNOWN 而非 ADD，避免"删除第一个任务"被静默变成添加
     return {
-      action: "ADD",
-      confidence: 0.5,
-      task: { content: trimmedInput },
+      action: "UNKNOWN",
+      confidence: 0,
       rawInput: input,
+      aiError: errorMsg,
     };
   }
 }

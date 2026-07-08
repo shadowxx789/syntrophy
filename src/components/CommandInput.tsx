@@ -104,13 +104,14 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
           );
           setLastParsed(parsedCommand);
         } catch (aiError) {
-          console.warn("AI 解析失败，降级为直接添加:", aiError);
-          // AI 失败时降级
+          const errMsg = aiError instanceof Error ? aiError.message : "AI 解析失败";
+          console.warn("AI 解析失败:", aiError);
+          // AI 失败时标记错误，不再静默降级为 ADD
           parsedCommand = {
-            action: "ADD",
-            confidence: 1,
-            task: { content: trimmedInput },
+            action: "UNKNOWN",
+            confidence: 0,
             rawInput: trimmedInput,
+            aiError: errMsg,
           };
         }
       } else {
@@ -246,6 +247,11 @@ export function CommandInput({ onTaskCreated, onTaskUpdated, onTaskDeleted }: Co
 
       case "UNKNOWN":
       default:
+        // AI 解析失败时不静默添加，提示用户
+        if (command.aiError) {
+          setError(`AI 解析失败: ${command.aiError}。请重试或检查 AI 配置。`);
+          return;
+        }
         // 低置信度或未知操作，作为添加任务处理
         if (command.rawInput) {
           const newTask = await createTask({

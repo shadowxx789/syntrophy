@@ -60,6 +60,9 @@ CREATE TABLE public.projects (
 CREATE INDEX idx_projects_user_id ON public.projects(user_id);
 CREATE INDEX idx_projects_updated_at ON public.projects(updated_at);
 
+-- Unique index for upsert onConflict: "id,user_id"
+CREATE UNIQUE INDEX IF NOT EXISTS projects_id_user_id_key ON public.projects(id, user_id);
+
 -- Enable RLS
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 
@@ -86,8 +89,11 @@ CREATE TABLE public.tasks (
   content TEXT NOT NULL,
   start_date DATE,
   end_date DATE,
-  status TEXT DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
-  priority TEXT CHECK (priority IN ('low', 'medium', 'high') OR priority IS NULL),
+  status TEXT DEFAULT 'pending' NOT NULL
+    CHECK (status IN ('pending', 'in_progress', 'completed', 'delayed')),
+  pic TEXT,                                      -- Person In Charge
+  completed_date DATE,                           -- Completed date (ISO 8601)
+  remark TEXT,                                   -- Remark / notes
   raw_command TEXT,                              -- Original AI command
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
@@ -100,6 +106,9 @@ CREATE INDEX idx_tasks_user_id ON public.tasks(user_id);
 CREATE INDEX idx_tasks_project_id ON public.tasks(project_id);
 CREATE INDEX idx_tasks_updated_at ON public.tasks(updated_at);
 CREATE INDEX idx_tasks_status ON public.tasks(status);
+
+-- Unique index for upsert onConflict: "id,user_id"
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_id_user_id_key ON public.tasks(id, user_id);
 
 -- Enable RLS
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;

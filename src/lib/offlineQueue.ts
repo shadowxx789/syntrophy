@@ -86,8 +86,10 @@ export async function removeOperation(id: string): Promise<void> {
  * Update operation retry count
  */
 export async function markOperationFailed(id: string, error: string): Promise<void> {
+  const existing = await db.table<OfflineOperation>("offlineQueue").get(id);
+  if (!existing) return;
   await db.table("offlineQueue").update(id, {
-    retryCount: db.table("offlineQueue").get(id).then((op) => (op?.retryCount || 0) + 1),
+    retryCount: (existing.retryCount || 0) + 1,
     lastError: error,
   });
 }

@@ -273,6 +273,8 @@ export interface ParsedCommand {
   targetId?: string;
   confidence: number;
   rawInput: string;
+  /** AI 解析失败时的错误信息，存在则表示结果不是 AI 解析的而是降级 */
+  aiError?: string;
 }
 
 // ============================================================================

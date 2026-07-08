@@ -68,6 +68,7 @@ interface RemoteTask {
   remark?: string | null;
   priority?: "low" | "medium" | "high" | null;
   raw_command: string | null;
+  version?: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -80,6 +81,7 @@ interface RemoteProject {
   display_order: number;
   color: string | null;
   is_archived: boolean;
+  version?: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -598,7 +600,7 @@ function mapRemoteTaskToLocal(remote: RemoteTask): SyntropyTask {
     completedDate: remote.completed_date || undefined,
     remark: remote.remark || undefined,
     rawCommand: remote.raw_command || undefined,
-    version: 1,
+    version: remote.version ?? 1,
     createdAt: remote.created_at,
     updatedAt: remote.updated_at,
     deletedAt: remote.deleted_at || undefined,
@@ -674,7 +676,7 @@ function mapRemoteProjectToLocal(remote: RemoteProject): SyntropyProject {
     displayOrder: remote.display_order,
     color: remote.color || undefined,
     isArchived: remote.is_archived,
-    version: 1,
+    version: remote.version ?? 1,
     createdAt: remote.created_at,
     updatedAt: remote.updated_at,
     deletedAt: remote.deleted_at || undefined,
