@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SyntropyTask, CreateTaskInput, UpdateTaskInput } from "@/types";
+import type { SyntropyTask, CreateTaskInput, UpdateTaskInput, TaskStatus } from "@/types";
 import { db, DEFAULT_PROJECT_ID } from "@/lib/db";
 import { generateTaskId, getOrCreateDeviceId, generateOperationId } from "@/lib/generateId";
 
@@ -129,6 +129,14 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       updatedBy: deviceId,
     };
 
+    // 清理 undefined 值：spread 会把 input 中 undefined 字段写入对象，
+    // 显式删除以保持语义干净（Dexie/IndexedDB 不区分 undefined 和 absent）
+    for (const key of Object.keys(updatedTask) as (keyof SyntropyTask)[]) {
+      if (updatedTask[key] === undefined) {
+        delete updatedTask[key];
+      }
+    }
+
     await db.tasks.put(updatedTask);
 
     // 记录操作日志
@@ -154,14 +162,20 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
     const task = get().tasks.find((t) => t.id === id);
     if (!task) return;
 
-    const newStatus: "pending" | "completed" =
+    // 完整状态机：completed ↔ pending，其他状态切到 completed
+    // 避免把 in_progress/delayed 强行 round 成 completed
+    const newStatus: TaskStatus =
       task.status === "completed" ? "pending" : "completed";
 
-    await get().updateTask(id, {
-      status: newStatus,
-      // 切换状态时更新 completedDate
-      completedDate: newStatus === "completed" ? new Date().toISOString().split("T")[0] : undefined,
-    });
+    const updates: UpdateTaskInput = { status: newStatus };
+    // 完成时写入 completedDate，取消完成时清除
+    if (newStatus === "completed") {
+      updates.completedDate = new Date().toISOString().split("T")[0];
+    }
+    // 不传 completedDate: undefined — updateTask 会清理 undefined 值，
+    // 但显式不传更清晰。切回 pending 时靠 cleanup 逻辑删除旧 completedDate。
+
+    await get().updateTask(id, updates);
   },
 
   deleteTask: async (id: string) => {

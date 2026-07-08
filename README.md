@@ -95,7 +95,7 @@ App 任务列表  ←──── ID 锚点 ────→  Excel 工作表
 | **存储** | IndexedDB (Dexie.js) | 浏览器本地数据库 |
 | **AI** | OpenAI / DeepSeek | BYOK 模式，用户自持 Key |
 | **邮件** | Resend API | 服务端邮件发送 |
-| **Excel** | SheetJS + ExcelJS | 读写 + 样式控制 |
+| **Excel** | ExcelJS | 读写 + 样式控制 |
 | **部署** | Vercel | 边缘函数 + CDN |
 | **测试** | Vitest + Playwright | 单元测试 + E2E |
 | **认证** | Supabase Auth | 邮箱密码认证 |
@@ -108,7 +108,7 @@ App 任务列表  ←──── ID 锚点 ────→  Excel 工作表
 ### 环境要求
 
 - Node.js >= 18.17
-- pnpm >= 8.0 (推荐) 或 npm >= 9.0
+- npm >= 9.0 (项目使用 `package-lock.json`)
 
 ### 安装步骤
 
@@ -118,14 +118,14 @@ git clone https://github.com/shadowxx789/syntrophy.git
 cd syntropy
 
 # 2. 安装依赖
-pnpm install
+npm install
 
 # 3. 配置环境变量
 cp .env.example .env.local
 # 编辑 .env.local，填入你的 API Keys
 
 # 4. 启动开发服务器
-pnpm dev
+npm run dev
 ```
 
 访问 [http://localhost:3000](http://localhost:3000) 开始使用。
@@ -171,9 +171,9 @@ src/
 │   └── UndoToast.tsx      # 撤销提示
 ├── lib/
 │   ├── db.ts              # Dexie 数据库实例
-│   ├── aiService.ts       # AI 服务封装
+│   ├── ai/                # AI 服务（service.ts, parseCommand.ts, prompts.ts）
 │   ├── diffEngine.ts      # 差异对比算法
-│   ├── exportExcel.ts     # Excel 导出
+│   ├── styledExport.ts    # Excel 导出（带样式）
 │   └── importExcel.ts     # Excel 导入
 ├── stores/
 │   ├── useTaskStore.ts    # 任务状态
@@ -236,11 +236,11 @@ M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线   
 
 | 阶段 | 状态 | 核心功能 |
 |------|------|----------|
-| **Phase 1** | 🔄 进行中 | 任务 CRUD、多 Tab、Excel 导出 |
-| **Phase 2** | ⏳ 待开始 | AI 解析、5秒撤销、Visual Diff |
-| **Phase 3** | ⏳ 待开始 | 邮件发送、PWA 离线、Quick Mode |
-| **Phase 4** | ⏳ 待开始 | 测试优化、文档、正式上线 |
-| **Phase 5** | ⏳ 待开始 | 用户认证、云端同步、多端恢复 |
+| **Phase 1** | ✅ 已完成 | 任务 CRUD、多 Tab、Excel 导出 |
+| **Phase 2** | ✅ 已完成 | AI 解析、5秒撤销、Visual Diff |
+| **Phase 3** | ✅ 已完成 | 邮件发送、PWA 离线、Quick Mode |
+| **Phase 4** | ✅ 已完成 | 测试优化、文档、正式上线 |
+| **Phase 5** | ✅ 已完成 | 用户认证、云端同步、多端恢复 |
 
 > 📋 详细开发计划请查看 [plan.md](./plan.md)
 
@@ -250,13 +250,13 @@ M1: 内部可用      M2: AI完成       M3: Beta发布      M4: 正式上线   
 
 ```bash
 # 运行单元测试
-pnpm test
+npm run test:run
 
 # 运行 E2E 测试
-pnpm test:e2e
+npm run test:e2e
 
 # 测试覆盖率报告
-pnpm test:coverage
+npm run test:coverage
 ```
 
 ---
@@ -271,10 +271,10 @@ pnpm test:coverage
 
 ```bash
 # 构建生产版本
-pnpm build
+npm run build
 
 # 启动生产服务器
-pnpm start
+npm run start
 ```
 
 ---
@@ -320,7 +320,7 @@ pnpm start
 - [Next.js](https://nextjs.org/) - React 全栈框架
 - [shadcn/ui](https://ui.shadcn.com/) - 高质量 UI 组件
 - [Dexie.js](https://dexie.org/) - IndexedDB 封装
-- [SheetJS](https://sheetjs.com/) - Excel 处理库
+- [ExcelJS](https://github.com/exceljs/exceljs) - Excel 读写与样式控制
 - [Resend](https://resend.com/) - 邮件发送服务
 - [Supabase](https://supabase.com/) - 开源 Firebase 替代方案
 
