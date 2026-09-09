@@ -14,7 +14,7 @@ export type TaskStatus = "pending" | "in_progress" | "completed" | "delayed";
  * 包含所有同步元数据字段 (version, ownerId, createdBy, updatedBy, deletedAt)
  */
 export interface SyntropyTask {
-  /** 唯一标识符，格式: SYN-YYYY-XXXX */
+  /** 唯一标识符，格式: SYN-YYYY-{device}-{seq}；历史数据可能是 SYN-YYYY-XXXX */
   id: string;
 
   /** 所属项目ID，格式: PROJ-XXXX */
@@ -100,7 +100,7 @@ export type UpdateTaskInput = Partial<
  * 项目模型 - 对应 Tab
  */
 export interface SyntropyProject {
-  /** 唯一标识符，格式: PROJ-XXXX */
+  /** 唯一标识符，格式: PROJ-{device}-{seq}；默认项目仍为 PROJ-0001 */
   id: string;
 
   /** 项目名称 */

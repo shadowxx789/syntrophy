@@ -36,18 +36,25 @@ export function getOrCreateDeviceId(): string {
 }
 
 /**
- * 生成任务 ID
- * 格式: SYN-YYYY-XXXX (年份 + 4位自增序号)
- *
- * @example
- * generateTaskId() // => "SYN-2026-0001"
+ * 设备命名空间：嵌入任务/项目 ID，避免多设备共用 SYN-YYYY-0001 撞主键。
+ * 历史 ID（SYN-2026-0001 / PROJ-0001）保持不动。
  */
-export async function generateTaskId(): Promise<string> {
-  const year = new Date().getFullYear();
-  const counterName = `task-${year}`;
+export function getIdNamespace(): string {
+  const deviceId = getOrCreateDeviceId();
+  const match = /^DEV-([a-f0-9]{8})$/i.exec(deviceId);
+  if (match) return match[1].toLowerCase();
 
-  // 使用事务确保原子性
-  const newValue = await db.transaction("rw", db.counters, async () => {
+  // 兼容 syncService 写入的 device_${timestamp}_${random}
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < deviceId.length; i++) {
+    hash ^= deviceId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+async function nextCounterValue(counterName: string): Promise<number> {
+  return db.transaction("rw", db.counters, async () => {
     let counter = await db.counters.get(counterName);
 
     if (!counter) {
@@ -59,36 +66,36 @@ export async function generateTaskId(): Promise<string> {
 
     return counter.value;
   });
+}
 
+/**
+ * 生成任务 ID
+ * 格式: SYN-YYYY-{device}-{seq}（device = 8 hex 命名空间）
+ *
+ * @example
+ * generateTaskId() // => "SYN-2026-a1b2c3d4-0001"
+ */
+export async function generateTaskId(): Promise<string> {
+  const year = new Date().getFullYear();
+  const namespace = getIdNamespace();
+  const newValue = await nextCounterValue(`task-${year}`);
   const paddedNumber = String(newValue).padStart(4, "0");
-  return `SYN-${year}-${paddedNumber}`;
+  return `SYN-${year}-${namespace}-${paddedNumber}`;
 }
 
 /**
  * 生成项目 ID
- * 格式: PROJ-XXXX (4位自增序号)
+ * 格式: PROJ-{device}-{seq}
+ * 默认项目 PROJ-0001 不走此函数，保持兼容。
  *
  * @example
- * generateProjectId() // => "PROJ-0001"
+ * generateProjectId() // => "PROJ-a1b2c3d4-0001"
  */
 export async function generateProjectId(): Promise<string> {
-  const counterName = "project";
-
-  const newValue = await db.transaction("rw", db.counters, async () => {
-    let counter = await db.counters.get(counterName);
-
-    if (!counter) {
-      counter = { name: counterName, value: 0 };
-    }
-
-    counter.value += 1;
-    await db.counters.put(counter);
-
-    return counter.value;
-  });
-
+  const namespace = getIdNamespace();
+  const newValue = await nextCounterValue("project");
   const paddedNumber = String(newValue).padStart(4, "0");
-  return `PROJ-${paddedNumber}`;
+  return `PROJ-${namespace}-${paddedNumber}`;
 }
 
 /**

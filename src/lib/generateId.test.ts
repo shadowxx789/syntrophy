@@ -1,4 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const counters = new Map<string, { name: string; value: number }>();
+
+vi.mock("./db", () => ({
+  db: {
+    transaction: async (
+      _mode: string,
+      _table: unknown,
+      callback: () => Promise<number>
+    ) => callback(),
+    counters: {
+      get: async (name: string) => counters.get(name),
+      put: async (counter: { name: string; value: number }) => {
+        counters.set(counter.name, counter);
+      },
+    },
+  },
+}));
+
 import * as idUtils from "../lib/generateId";
 
 // Mock localStorage
@@ -96,5 +115,49 @@ describe("generateUUID", () => {
   it("should generate a valid UUID", () => {
     const uuid = idUtils.generateUUID();
     expect(uuid).toBe("mock-uuid-1234");
+  });
+});
+
+describe("generateTaskId / generateProjectId", () => {
+  beforeEach(() => {
+    localStorageMock.clear();
+    counters.clear();
+    mockGetRandomValues.mockImplementation((arr: Uint8Array) => {
+      arr[0] = 0xa1;
+      arr[1] = 0xb2;
+      arr[2] = 0xc3;
+      arr[3] = 0xd4;
+      return arr;
+    });
+  });
+
+  it("embeds device namespace so two devices cannot share SYN-YYYY-0001", async () => {
+    const id = await idUtils.generateTaskId();
+    expect(id).toMatch(/^SYN-\d{4}-a1b2c3d4-\d{4}$/);
+    expect(id).not.toMatch(/^SYN-\d{4}-\d{4}$/);
+  });
+
+  it("uses distinct namespaces for distinct device ids", async () => {
+    localStorageMock.setItem("syntropy_device_id", "DEV-aaaaaaaa");
+    const first = await idUtils.generateTaskId();
+
+    localStorageMock.setItem("syntropy_device_id", "DEV-bbbbbbbb");
+    const second = await idUtils.generateTaskId();
+
+    expect(first).toContain("aaaaaaaa");
+    expect(second).toContain("bbbbbbbb");
+    expect(first).not.toBe(second);
+  });
+
+  it("hashes legacy device ids into an 8-hex namespace", () => {
+    localStorageMock.setItem("syntropy_device_id", "device_123_abc");
+    const ns = idUtils.getIdNamespace();
+    expect(ns).toMatch(/^[a-f0-9]{8}$/);
+  });
+
+  it("generates project ids with device namespace, not PROJ-0001", async () => {
+    const id = await idUtils.generateProjectId();
+    expect(id).toMatch(/^PROJ-a1b2c3d4-\d{4}$/);
+    expect(id).not.toBe("PROJ-0001");
   });
 });

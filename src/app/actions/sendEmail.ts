@@ -1,6 +1,8 @@
 "use server";
 
 import { Resend } from "resend";
+import { consumeEmailRateLimit, validateEmailAttachment } from "@/lib/emailGuard";
+import { getAuthenticatedUserId } from "@/lib/supabaseServer";
 
 export interface SendEmailInput {
   to: string;
@@ -23,8 +25,25 @@ export interface SendEmailResult {
  * Server Action: Send email with optional Excel attachment via Resend API
  *
  * Environment variable required: RESEND_API_KEY
+ * Requires a valid Supabase session. Unauthenticated callers are rejected.
  */
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  const userId = await getAuthenticatedUserId();
+  if (!userId) {
+    return {
+      success: false,
+      error: "未登录，无法发送邮件。",
+    };
+  }
+
+  const rate = consumeEmailRateLimit(userId);
+  if (!rate.allowed) {
+    return {
+      success: false,
+      error: `发送过于频繁，请 ${rate.retryAfterSec} 秒后再试。`,
+    };
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
@@ -40,6 +59,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return {
       success: false,
       error: "无效的邮箱地址格式。",
+    };
+  }
+
+  const attachmentError = validateEmailAttachment(input.attachment);
+  if (attachmentError) {
+    return {
+      success: false,
+      error: attachmentError,
     };
   }
 
