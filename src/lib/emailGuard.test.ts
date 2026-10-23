@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
   consumeEmailRateLimit,
   EMAIL_RATE_LIMIT_MAX,
+  escapeHtml,
   MAX_EMAIL_ATTACHMENT_BYTES,
   resetEmailRateLimitForTests,
   validateEmailAttachment,
@@ -55,5 +56,14 @@ describe("consumeEmailRateLimit", () => {
       consumeEmailRateLimit("user-1", now);
     }
     expect(consumeEmailRateLimit("user-2", now).allowed).toBe(true);
+  });
+});
+
+describe("escapeHtml", () => {
+  it("escapes tags and quotes", () => {
+    expect(escapeHtml(`<img src=x onerror="alert(1)">`)).toBe(
+      "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;"
+    );
+    expect(escapeHtml("a & b")).toBe("a &amp; b");
   });
 });

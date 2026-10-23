@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import type { SyntropyTask, CreateTaskInput, UpdateTaskInput, TaskStatus } from "@/types";
+import type { SyntropyTask, CreateTaskInput, UpdateTaskInput } from "@/types";
 import { db, DEFAULT_PROJECT_ID } from "@/lib/db";
 import { generateTaskId, getOrCreateDeviceId, generateOperationId } from "@/lib/generateId";
+import { nextToggleStatus } from "@/lib/taskStatus";
 
 interface TaskState {
   /** 当前加载的任务列表 */
@@ -137,6 +138,11 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
       }
     }
 
+    // 离开 completed 时必须清掉完成日，不能靠“不传字段”指望 spread 删掉旧值
+    if (input.status && input.status !== "completed") {
+      delete updatedTask.completedDate;
+    }
+
     await db.tasks.put(updatedTask);
 
     // 记录操作日志
@@ -162,18 +168,12 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
     const task = get().tasks.find((t) => t.id === id);
     if (!task) return;
 
-    // 完整状态机：completed ↔ pending，其他状态切到 completed
-    // 避免把 in_progress/delayed 强行 round 成 completed
-    const newStatus: TaskStatus =
-      task.status === "completed" ? "pending" : "completed";
+    const newStatus = nextToggleStatus(task.status);
 
     const updates: UpdateTaskInput = { status: newStatus };
-    // 完成时写入 completedDate，取消完成时清除
     if (newStatus === "completed") {
       updates.completedDate = new Date().toISOString().split("T")[0];
     }
-    // 不传 completedDate: undefined — updateTask 会清理 undefined 值，
-    // 但显式不传更清晰。切回 pending 时靠 cleanup 逻辑删除旧 completedDate。
 
     await get().updateTask(id, updates);
   },

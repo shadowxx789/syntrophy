@@ -1,7 +1,7 @@
 "use server";
 
 import { Resend } from "resend";
-import { consumeEmailRateLimit, validateEmailAttachment } from "@/lib/emailGuard";
+import { consumeEmailRateLimit, escapeHtml, validateEmailAttachment } from "@/lib/emailGuard";
 import { getAuthenticatedUserId } from "@/lib/supabaseServer";
 
 export interface SendEmailInput {
@@ -118,6 +118,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
  * Format email body with HTML template
  */
 function formatEmailBody(body: string, subject: string): string {
+  const safeSubject = escapeHtml(subject);
+  const safeBody = escapeHtml(body);
   return `
 <!DOCTYPE html>
 <html lang="zh">
@@ -131,13 +133,13 @@ function formatEmailBody(body: string, subject: string): string {
       ✦ 凝序 | Syntropy
     </h1>
     <p style="margin: 8px 0 0 0; opacity: 0.8; font-size: 14px;">
-      ${subject}
+      ${safeSubject}
     </p>
   </div>
   
   <div style="background: #ffffff; padding: 24px; border: 1px solid #e5e7eb; border-top: none;">
     <div style="white-space: pre-wrap; font-size: 15px;">
-${body}
+${safeBody}
     </div>
   </div>
   

@@ -215,7 +215,7 @@ interface DiffResult {
 
 ### 里程碑 M3 验收标准
 
-- [ ] 成功部署到Vercel (需手动操作)
+- [x] 成功部署到Vercel (https://syntrophy.vercel.app)
 - [x] 可通过邮件发送Excel附件
 - [x] PWA可安装到手机主屏
 - [x] 离线时基础功能可用
