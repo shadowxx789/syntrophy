@@ -50,6 +50,7 @@ CREATE TABLE public.projects (
   display_order INT DEFAULT 0,
   color TEXT,
   is_archived BOOLEAN DEFAULT FALSE,
+  version INT DEFAULT 1 NOT NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
   deleted_at TIMESTAMPTZ,                        -- Soft delete
@@ -95,6 +96,7 @@ CREATE TABLE public.tasks (
   completed_date DATE,                           -- Completed date (ISO 8601)
   remark TEXT,                                   -- Remark / notes
   raw_command TEXT,                              -- Original AI command
+  version INT DEFAULT 1 NOT NULL,                -- Local Lamport-ish version; LWW still uses updated_at
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
   deleted_at TIMESTAMPTZ,                        -- Soft delete
@@ -164,17 +166,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply updated_at trigger to all tables
+-- Apply updated_at trigger only where the server owns the clock.
+-- tasks/projects use client updated_at for Last-Write-Wins — do not overwrite.
 CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON public.user_profiles
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_projects_updated_at
-  BEFORE UPDATE ON public.projects
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_tasks_updated_at
-  BEFORE UPDATE ON public.tasks
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_sync_metadata_updated_at
@@ -197,6 +192,10 @@ RETURNS TABLE (
   is_deleted BOOLEAN
 ) AS $$
 BEGIN
+  IF auth.uid() IS NULL OR auth.uid() IS DISTINCT FROM p_user_id THEN
+    RAISE EXCEPTION 'not authorized' USING ERRCODE = '42501';
+  END IF;
+
   -- Return tasks changed since timestamp
   RETURN QUERY
   SELECT 
@@ -219,4 +218,12 @@ BEGIN
   WHERE p.user_id = p_user_id
     AND p.updated_at > p_since;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- ============================================
+-- 7. EXISTING-PROJECT MIGRATIONS (idempotent)
+-- ============================================
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;
+DROP TRIGGER IF EXISTS update_tasks_updated_at ON public.tasks;
+DROP TRIGGER IF EXISTS update_projects_updated_at ON public.projects;

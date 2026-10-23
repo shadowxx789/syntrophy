@@ -40,6 +40,7 @@ export interface Database {
           display_order: number;
           color: string | null;
           is_archived: boolean;
+          version: number;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -51,6 +52,7 @@ export interface Database {
           display_order?: number;
           color?: string | null;
           is_archived?: boolean;
+          version?: number;
           created_at: string;
           updated_at: string;
           deleted_at?: string | null;
@@ -62,6 +64,7 @@ export interface Database {
           display_order?: number;
           color?: string | null;
           is_archived?: boolean;
+          version?: number;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -80,6 +83,7 @@ export interface Database {
           completed_date: string | null;
           remark: string | null;
           raw_command: string | null;
+          version: number;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -96,6 +100,7 @@ export interface Database {
           completed_date?: string | null;
           remark?: string | null;
           raw_command?: string | null;
+          version?: number;
           created_at: string;
           updated_at: string;
           deleted_at?: string | null;
@@ -112,6 +117,7 @@ export interface Database {
           completed_date?: string | null;
           remark?: string | null;
           raw_command?: string | null;
+          version?: number;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

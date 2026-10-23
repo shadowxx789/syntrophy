@@ -401,21 +401,26 @@ async function pushChanges(
   }
 
   // Upsert tasks to Supabase
-  let useLegacySchema = false;
+  let taskPayloadMode: "extended" | "extendedNoVersion" | "legacy" = "extended";
 
   for (const task of localTasks) {
     try {
-      const taskData = useLegacySchema
-        ? buildLegacyTaskPayload(task, userId)
-        : buildExtendedTaskPayload(task, userId);
+      const taskData = buildTaskPayload(task, userId, taskPayloadMode);
 
       const { error } = await supabase
         .from("tasks")
         .upsert(taskData as never, { onConflict: "id,user_id" });
 
       if (error) {
-        if (!useLegacySchema && isMissingColumnError(error)) {
-          useLegacySchema = true;
+        if (taskPayloadMode === "extended" && isVersionColumnError(error)) {
+          taskPayloadMode = "extendedNoVersion";
+          const fallbackData = buildTaskPayload(task, userId, taskPayloadMode);
+          const { error: fallbackError } = await supabase
+            .from("tasks")
+            .upsert(fallbackData as never, { onConflict: "id,user_id" });
+          if (fallbackError) throw fallbackError;
+        } else if (taskPayloadMode !== "legacy" && isMissingColumnError(error)) {
+          taskPayloadMode = "legacy";
           const fallbackData = buildLegacyTaskPayload(task, userId);
           const { error: fallbackError } = await supabase
             .from("tasks")
@@ -436,25 +441,28 @@ async function pushChanges(
   }
 
   // Upsert projects to Supabase
+  let omitProjectVersion = false;
+
   for (const project of localProjects) {
     try {
-      const projectData = {
-        id: project.id,
-        user_id: userId,
-        name: project.name,
-        display_order: project.displayOrder,
-        color: project.color || null,
-        is_archived: project.isArchived,
-        created_at: project.createdAt,
-        updated_at: project.updatedAt,
-        deleted_at: project.deletedAt || null,
-      };
+      const projectData = buildProjectPayload(project, userId, omitProjectVersion);
 
       const { error } = await supabase
         .from("projects")
         .upsert(projectData as never, { onConflict: "id,user_id" });
 
-      if (error) throw error;
+      if (error) {
+        if (!omitProjectVersion && isVersionColumnError(error)) {
+          omitProjectVersion = true;
+          const fallbackData = buildProjectPayload(project, userId, true);
+          const { error: fallbackError } = await supabase
+            .from("projects")
+            .upsert(fallbackData as never, { onConflict: "id,user_id" });
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw error;
+        }
+      }
       uploaded.projects++;
     } catch (error) {
       errors.push({
@@ -640,10 +648,47 @@ function buildExtendedTaskPayload(task: SyntropyTask, userId: string) {
     completed_date: task.completedDate || null,
     remark: task.remark || null,
     raw_command: task.rawCommand || null,
+    version: task.version ?? 1,
     created_at: task.createdAt,
     updated_at: task.updatedAt,
     deleted_at: task.deletedAt || null,
   };
+}
+
+function buildTaskPayload(
+  task: SyntropyTask,
+  userId: string,
+  mode: "extended" | "extendedNoVersion" | "legacy"
+) {
+  if (mode === "legacy") return buildLegacyTaskPayload(task, userId);
+  const extended = buildExtendedTaskPayload(task, userId);
+  if (mode === "extendedNoVersion") {
+    const { version, ...rest } = extended;
+    void version;
+    return rest;
+  }
+  return extended;
+}
+
+function buildProjectPayload(project: SyntropyProject, userId: string, omitVersion: boolean) {
+  const projectData = {
+    id: project.id,
+    user_id: userId,
+    name: project.name,
+    display_order: project.displayOrder,
+    color: project.color || null,
+    is_archived: project.isArchived,
+    version: project.version ?? 1,
+    created_at: project.createdAt,
+    updated_at: project.updatedAt,
+    deleted_at: project.deletedAt || null,
+  };
+  if (omitVersion) {
+    const { version, ...rest } = projectData;
+    void version;
+    return rest;
+  }
+  return projectData;
 }
 
 function buildLegacyTaskPayload(task: SyntropyTask, userId: string) {
@@ -667,6 +712,12 @@ function isMissingColumnError(error: unknown): boolean {
   if (!(error && typeof error === "object" && "message" in error)) return false;
   const message = String((error as { message?: string }).message || "");
   return message.includes("column") && message.includes("does not exist");
+}
+
+function isVersionColumnError(error: unknown): boolean {
+  if (!isMissingColumnError(error)) return false;
+  const message = String((error as { message?: string }).message || "");
+  return message.includes("version");
 }
 
 function mapRemoteProjectToLocal(remote: RemoteProject): SyntropyProject {
